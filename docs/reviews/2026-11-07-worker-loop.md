@@ -52,4 +52,3 @@ Executed checks on macOS / Linux arm64 containers, Python 3.12:
 - Ruff, formatting, strict mypy and documentation/example checks passed.
 
 No schema migration, package release or production deployment is included.
-
