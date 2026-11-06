@@ -11,15 +11,18 @@ from uuid import uuid4
 
 from cardreport import (
     BindingError,
+    ChromiumRenderer,
     DataError,
     DataLimits,
     DependencyError,
     LayoutOverflowError,
+    Renderer,
     RenderTimeoutError,
     ReportTemplate,
     TemplateError,
     UnsupportedFeatureError,
     ValidationError,
+    WeasyPrintRenderer,
     datasets_from_json,
     datasets_from_yaml,
 )
@@ -53,10 +56,15 @@ def main() -> None:
         remaining = min(options["render_deadline"] - time.monotonic(), 300)
         if remaining <= 0:
             raise RenderTimeoutError("Execution deadline expired")
+        renderer_types: dict[str, type[Renderer]] = {
+            "chromium": ChromiumRenderer,
+            "weasyprint": WeasyPrintRenderer,
+        }
+        renderer = renderer_types[options["renderer"]]()
         payload = (
-            report.to_pdf(timeout=remaining)
+            report.to_pdf(timeout=remaining, renderer=renderer)
             if options["output"] == "pdf"
-            else report.to_html().encode()
+            else report.to_html(renderer=renderer).encode()
         )
         if len(payload) > options["output_limit"]:
             outcome = {

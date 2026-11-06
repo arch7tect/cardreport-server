@@ -8,6 +8,13 @@ its ID/version and a streamed bundle of named datasets. PostgreSQL holds metadat
 and the queue; S3 holds inputs/results. Replaceable workers run bounded concurrent
 attempts and scale independently from the FastAPI application.
 
+PDF and HTML support `renderer=chromium` (default) and `renderer=weasyprint`.
+Both engines are included in the worker image. Chromium supports dashboard and
+flow; the experimental SVG/WeasyPrint engine supports dashboard only and requires
+no browser or JavaScript for rendering. Unsupported features fail explicitly.
+HTML is a preview; PDF is the authoritative checked output. See
+[renderer selection](docs/user/api.md#renderer-selection) for details.
+
 **Development version; no package release yet.** The service, examples and local deployment checks are implemented; see [implementation progress](docs/implementation-plan.md) and the
 [verification record](docs/reviews/2026-11-06-verification.md). There is no built-in
 authentication: deploy only on a trusted internal network.
@@ -45,6 +52,7 @@ generate(
     data=Path("examples/reference_data.json"),
     destination=Path("output/reference.pdf"),
     template_id="collections",
+    renderer="chromium",  # Or "weasyprint" for dashboard reports.
 )
 ```
 
@@ -62,15 +70,15 @@ uncertain response: it can create a duplicate job.
 - [Internal Kubernetes and kind acceptance](docs/user/kubernetes.md)
 - [Development checks](docs/development.md)
 
-PDF uses Chromium. HTML is a static preview and does not perform PDF geometry
-checks. The library's dataset limits remain in force. Upload streaming bounds API
+The library's dataset limits remain in force. Upload streaming bounds API
 memory; worker decoding and rendering still materialize data. There is no arbitrary
 code execution, SQL connector, URL data fetcher, broker, or separate scheduler.
 
 ## Project documents
 
 [Design](docs/design.md) · [Implementation plan](docs/implementation-plan.md) ·
-[Design review](docs/reviews/2026-11-06-design.md) · [Plan review](docs/reviews/2026-11-06-implementation-plan.md)
+[Design review](docs/reviews/2026-11-06-design.md) · [Plan review](docs/reviews/2026-11-06-implementation-plan.md) ·
+[Renderer review and checks](docs/reviews/2026-11-07-renderers.md)
 
 ## License
 

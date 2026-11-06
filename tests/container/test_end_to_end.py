@@ -28,15 +28,21 @@ def wait(client: httpx.Client, url: str) -> dict[str, object]:
 
 
 @pytest.mark.parametrize(
-    "name,extension,output",
+    "name,extension,output,renderer",
     [
-        ("reference", "json", "pdf"),
-        ("reference", "yaml", "html"),
-        ("flow", "json", "pdf"),
+        ("reference", "json", "pdf", "chromium"),
+        ("reference", "yaml", "html", "chromium"),
+        ("flow", "json", "pdf", "chromium"),
+        ("reference", "json", "pdf", "weasyprint"),
+        ("reference", "yaml", "html", "weasyprint"),
     ],
 )
 def test_complete_report(
-    integration_settings: Settings, name: str, extension: str, output: str
+    integration_settings: Settings,
+    name: str,
+    extension: str,
+    output: str,
+    renderer: str,
 ) -> None:
     slug = "e2e-" + uuid4().hex
     media = "application/json" if extension == "json" else "application/yaml"
@@ -52,7 +58,7 @@ def test_complete_report(
         data = (ROOT / f"examples/{name}_data.{extension}").read_bytes()
         response = client.post(
             "/v1/reports",
-            params={"template_id": slug, "output": output},
+            params={"template_id": slug, "output": output, "renderer": renderer},
             content=(data[i : i + 1024] for i in range(0, len(data), 1024)),
             headers={"Content-Type": media},
         )
@@ -60,6 +66,7 @@ def test_complete_report(
         job = response.json()
         status = wait(client, job["status_url"])
         assert status["state"] == "succeeded", status
+        assert job["renderer"] == status["renderer"] == renderer
         content = client.get(job["content_url"])
         assert content.status_code == 200
         assert len(content.content) == int(content.headers["content-length"])
@@ -69,7 +76,7 @@ def test_complete_report(
         )
         assert "attachment" in content.headers["content-disposition"]
         assert status["engine_version"] == "0.8.1"
-        destination = ROOT / "output" / f"{name}.{output}"
+        destination = ROOT / "output" / f"{name}-{renderer}.{output}"
         destination.parent.mkdir(exist_ok=True)
         destination.write_bytes(content.content)
         if output == "pdf":
@@ -82,6 +89,8 @@ def test_complete_report(
                     assert text.count(f"ITEM-{i:04d}") == 1
         else:
             assert "<html" in content.text.lower()
+            if renderer == "weasyprint":
+                assert "<svg" in content.text and "<script" not in content.text
 
 
 def test_invalid_data_terminal(integration_settings: Settings) -> None:
@@ -112,6 +121,40 @@ def test_invalid_data_terminal(integration_settings: Settings) -> None:
             "code": "invalid_data",
             "stage": "bind",
             "message": "Datasets do not satisfy the template or data limits",
+            "retryable": False,
+        }
+        assert client.get(job["content_url"]).status_code == 409
+
+
+@pytest.mark.parametrize("output", ["pdf", "html"])
+def test_weasyprint_flow_is_terminal(
+    integration_settings: Settings, output: str
+) -> None:
+    slug = "flow-" + uuid4().hex
+    with httpx.Client(
+        base_url="http://127.0.0.1:" + os.environ["API_PORT"], timeout=20
+    ) as client:
+        response = client.post(
+            f"/v1/templates/{slug}/versions",
+            content=(ROOT / "examples/flow_template.json").read_bytes(),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 201
+        response = client.post(
+            "/v1/reports",
+            params={"template_id": slug, "output": output, "renderer": "weasyprint"},
+            content=(ROOT / "examples/flow_data.json").read_bytes(),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 202
+        job = response.json()
+        status = wait(client, job["status_url"])
+        assert status["state"] == "failed" and status["attempts"] == 1
+        assert status["renderer"] == "weasyprint"
+        assert status["error"] == {
+            "code": "unsupported_feature",
+            "stage": "render",
+            "message": "Renderer does not support this template feature",
             "retryable": False,
         }
         assert client.get(job["content_url"]).status_code == 409

@@ -11,15 +11,24 @@ pytestmark = pytest.mark.container
 
 
 @pytest.mark.parametrize(
-    "case,expected",
+    "case,renderer,expected",
     [
-        ("expired", "render_timeout"),
-        ("size", "output_too_large"),
-        ("overflow", "layout_overflow"),
+        ("expired", "chromium", "render_timeout"),
+        ("expired", "weasyprint", "render_timeout"),
+        ("size", "chromium", "output_too_large"),
+        ("size", "weasyprint", "output_too_large"),
+        ("overflow", "chromium", "layout_overflow"),
+        ("overflow", "weasyprint", "layout_overflow"),
+        # CardReport 0.8.1 wraps a native assertion for this oversized table.
+        ("large_table", "weasyprint", "render_failed"),
     ],
 )
 def test_real_child_limits(
-    integration_settings: Settings, case: str, expected: str
+    integration_settings: Settings,
+    case: str,
+    expected: str,
+    renderer: str,
+    template_spec: dict[str, object],
 ) -> None:
     project = os.environ["COMPOSE_PROJECT_NAME"]
     assert project.startswith("cardreport-test-")
@@ -36,12 +45,32 @@ def test_real_child_limits(
         text=True,
     ).split()[0]
     root = Path(__file__).resolve().parents[2]
-    template = json.loads((root / "examples/flow_template.json").read_text())
-    if case == "overflow":
+    name = "reference" if case == "size" and renderer == "weasyprint" else "flow"
+    template = json.loads((root / f"examples/{name}_template.json").read_text())
+    data = (root / f"examples/{name}_data.json").read_text()
+    if case in {"overflow", "large_table"}:
         template["report"]["mode"] = "dashboard"
+    if case == "overflow" and renderer == "weasyprint":
+        template = json.loads(json.dumps(template_spec))
+        template["report"]["blocks"] = [
+            {
+                "type": "row",
+                "height_mm": 5,
+                "children": template["report"]["blocks"],
+            }
+        ]
+        data = json.dumps(
+            {
+                "format": "cardreport.data/1",
+                "datasets": {
+                    "summary": {"columns": ["total"], "rows": [{"total": 34}]}
+                },
+            }
+        )
     payload = {
         "template": template,
-        "data": (root / "examples/flow_data.json").read_text(),
+        "data": data,
+        "renderer": renderer,
         "case": case,
     }
     code = """import json,sys,tempfile,time,subprocess
@@ -52,7 +81,7 @@ with tempfile.TemporaryDirectory() as tmp:
  d=Path(tmp)
  (d/'template.json').write_text(json.dumps(p['template']))
  (d/'input').write_text(p['data'])
- (d/'options.json').write_text(json.dumps({'input_type':'application/json','output':'pdf' if p['case']=='overflow' else 'html','render_deadline':time.monotonic()+(-1 if p['case']=='expired' else 30),'output_limit':1024 if p['case']=='size' else 32000000,'data_limits':{}}))
+ (d/'options.json').write_text(json.dumps({'input_type':'application/json','renderer':p['renderer'],'output':'pdf' if p['case'] in ('overflow','large_table') else 'html','render_deadline':time.monotonic()+(-1 if p['case']=='expired' else 30),'output_limit':1024 if p['case']=='size' else 32000000,'data_limits':{}}))
  subprocess.run([sys.executable,'-m','cardreport_server.render_child',str(d)],env=child_environment(d),check=True,timeout=40)
  print((d/'outcome.json').read_text())
 """

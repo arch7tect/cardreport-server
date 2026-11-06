@@ -93,3 +93,29 @@ def test_health(integration_settings: Settings) -> None:
     with TestClient(create_app(integration_settings)) as client:
         assert client.get("/health/live").status_code == 200
         assert client.get("/health/ready").status_code == 200
+
+
+def test_renderer_migration_preserves_existing_jobs(
+    database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from importlib import import_module
+
+    from psycopg.errors import CheckViolation
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    migration = import_module("migrations.versions.0005_renderer")
+    with database.pool.connection() as conn, conn.transaction():
+        # A temporary table shadows the real queue only on this connection.
+        conn.execute("CREATE TEMP TABLE reports(id integer) ON COMMIT DROP")
+        conn.execute("INSERT INTO reports VALUES (1)")
+
+        def execute(statement: str) -> None:
+            conn.execute(statement)
+
+        monkeypatch.setattr(migration.op, "execute", execute)
+        migration.upgrade()
+        row = conn.execute("SELECT renderer FROM reports WHERE id=1").fetchone()
+        assert row is not None and row["renderer"] == "chromium"
+        conn.execute("INSERT INTO reports(id,renderer) VALUES(2,'weasyprint')")
+        with pytest.raises(CheckViolation), conn.transaction():
+            conn.execute("INSERT INTO reports(id,renderer) VALUES(3,'unknown')")

@@ -37,7 +37,9 @@ uv run python scripts/test_integration.py --containers
 
 The harness creates a unique Compose project, test database, bucket and prefix;
 it migrates, runs real integration tests, builds the image, starts API/workers,
-and runs real PDF/HTML, process-crash and two-worker concurrency tests. Failure
+and runs real PDF/HTML with Chromium and WeasyPrint, process-crash and two-worker
+concurrency tests. WeasyPrint flow requests are checked for an explicit terminal
+error; the paginated flow example runs on Chromium. Failure
 retains the isolated stack and logs under local/; success removes only resources
 created by that run. `--keep` retains a successful run for diagnosis. Do not run
 container tests against a developer stack or while another test suite mutates it.

@@ -16,11 +16,13 @@ from cardreport_server.templates import register
 pytestmark = pytest.mark.integration
 
 
+@pytest.mark.parametrize("renderer", [None, "chromium", "weasyprint"])
 def test_durable_upload(
     integration_settings: Settings,
     database: Database,
     storage: Storage,
     template_spec: dict[str, object],
+    renderer: str | None,
 ) -> None:
     slug = "data-" + uuid4().hex
     register(database, slug, json.dumps(template_spec).encode(), "application/json")
@@ -28,14 +30,16 @@ def test_durable_upload(
     with TestClient(create_app(integration_settings)) as client:
         accepted = client.post(
             "/v1/reports",
-            params={"template_id": slug},
+            params={"template_id": slug} | ({"renderer": renderer} if renderer else {}),
             content=iter([data[:20], data[20:]]),
             headers={"Content-Type": "application/json"},
         )
         assert accepted.status_code == 202, accepted.text
         body = accepted.json()
+        assert body["renderer"] == (renderer or "chromium")
         row = client.get(body["status_url"]).json()
         assert row["state"] == "queued" and row["template_version"] == 1
+        assert row["renderer"] == body["renderer"]
         with database.pool.connection() as conn:
             stored = conn.execute(
                 "SELECT * FROM reports WHERE id=%s", (body["id"],)
@@ -48,6 +52,15 @@ def test_durable_upload(
             stream.close()
         assert stored["input_hash"] == hashlib.sha256(data).hexdigest()
         assert "input_key" not in row
+        assert (
+            client.post(
+                "/v1/reports",
+                params={"template_id": slug, "renderer": "unknown"},
+                content=data,
+                headers={"Content-Type": "application/json"},
+            ).status_code
+            == 422
+        )
         assert (
             client.post(
                 "/v1/reports",
@@ -79,6 +92,7 @@ def test_snapshot_and_fencing(
         0,
         "none",
         "pdf",
+        "weasyprint",
     )
     assert jobs.status(database, identifier)["template_version"] == 1
     with database.pool.connection() as conn:
@@ -89,6 +103,7 @@ def test_snapshot_and_fencing(
         )
     attempt = jobs.claim(database, integration_settings)
     assert attempt is not None and attempt.report_id == identifier
+    assert attempt.renderer == "weasyprint"
     assert jobs.heartbeat(database, integration_settings, [attempt]) == {attempt.token}
     with database.pool.connection() as conn:
         conn.execute(
@@ -106,6 +121,16 @@ def test_snapshot_and_fencing(
     )
     assert jobs.reap(database, integration_settings) >= 1
     assert jobs.status(database, identifier)["state"] == "queued"
+    with database.pool.connection() as conn:
+        conn.execute(
+            "UPDATE reports SET next_attempt_at=clock_timestamp() WHERE id=%s",
+            (identifier,),
+        )
+    next_attempt = jobs.claim(database, integration_settings)
+    assert next_attempt is not None and next_attempt.report_id == identifier
+    assert next_attempt.renderer == "weasyprint" and next_attempt.attempt_no == 2
+    assert jobs.retry(database, integration_settings, next_attempt)
+    assert jobs.status(database, identifier)["renderer"] == "weasyprint"
 
 
 def test_failed_enqueue_keeps_orphan_not_job(

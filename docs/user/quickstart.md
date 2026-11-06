@@ -9,6 +9,7 @@ Run the complete streaming client:
 ```sh
 uv run python examples/client.py
 uv run python examples/client.py --output output/reference.html
+uv run python examples/client.py --renderer weasyprint --output output/reference-weasyprint.pdf
 uv run python examples/client.py --template examples/flow_template.json --data examples/flow_data.json --output output/flow.pdf
 ```
 
@@ -23,8 +24,11 @@ public examples at library commit `e5a5ae3a5b5bb9b1f012ed39b3230c8f02d00d14`.
 The flow example is synthetic: 150 numbered rows demonstrate table pagination.
 
 A `202` response confirms durable upload and queue commit. Dataset validation and
-rendering happen asynchronously. HTML is a static semantic preview; only PDF runs
-Chromium's page geometry checks. The server currently uses Chromium for PDF.
+rendering happen asynchronously. Select `renderer="chromium"` (default) or
+`renderer="weasyprint"` in `generate()`, or `--renderer` on the client command.
+Both engines support PDF and HTML. Use Chromium for the flow example; WeasyPrint
+supports dashboard only. HTML is a preview and PDF is the authoritative checked
+output. See [renderer selection](api.md#renderer-selection) for differences.
 
 Open `/docs` for local Swagger and `/openapi.json` for the schema-derived contract.
 No browser assets require a public CDN. The API has no authentication and belongs

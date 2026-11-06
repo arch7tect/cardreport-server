@@ -12,6 +12,7 @@ from .errors import APIError
 from .settings import Settings
 
 Output = Literal["pdf", "html"]
+RendererName = Literal["chromium", "weasyprint"]
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,7 @@ def enqueue(
     input_size: int,
     input_hash: str,
     output: Output,
+    renderer: RendererName = "chromium",
 ) -> None:
     with db.pool.connection() as conn:
         count = conn.execute(
@@ -77,8 +79,8 @@ def enqueue(
         result = conn.execute(
             """
             INSERT INTO reports(id,template_id,template_version,input_key,input_type,input_size,input_hash,
-                                output_kind,input_retention,result_retention,metadata_retention)
-            SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE clock_timestamp() < %s RETURNING id
+                                output_kind,renderer,input_retention,result_retention,metadata_retention)
+            SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE clock_timestamp() < %s RETURNING id
             """,
             (
                 report_id,
@@ -89,6 +91,7 @@ def enqueue(
                 input_size,
                 input_hash,
                 output,
+                renderer,
                 settings.input_retention,
                 settings.result_retention,
                 settings.metadata_retention,
@@ -102,7 +105,7 @@ def enqueue(
 def status(db: Database, report_id: UUID) -> dict[str, Any]:
     with db.pool.connection() as conn:
         row = conn.execute(
-            """SELECT id,template_id,template_version,state,output_kind AS output,
+            """SELECT id,template_id,template_version,state,output_kind AS output,renderer,
             attempt_no AS attempts,created_at,started_at,finished_at,result_expires_at,
             error,terminal_state,engine_version,image_id,service_version
             FROM reports WHERE id=%s""",
@@ -125,6 +128,7 @@ class Attempt:
     input_size: int
     input_hash: str
     output: Output
+    renderer: RendererName
     lease_until: datetime
     deadline: datetime
 
@@ -159,6 +163,7 @@ def claim(db: Database, settings: Settings) -> Attempt | None:
         row["input_size"],
         row["input_hash"],
         row["output_kind"],
+        row["renderer"],
         row["lease_until"],
         row["attempt_deadline"],
     )

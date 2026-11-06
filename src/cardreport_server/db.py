@@ -8,7 +8,7 @@ from psycopg_pool import ConnectionPool
 
 from .settings import Settings
 
-SCHEMA_REVISION = "0004"
+SCHEMA_REVISION = "0005"
 
 
 class Database:

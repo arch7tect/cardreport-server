@@ -60,13 +60,14 @@ migration runs implicitly. CORS is disabled by default.
 | GET /v1/reports/{uuid}/content | Stream the committed successful PDF or HTML |
 
 `template_version` is optional (latest is resolved before reading data). `output`
-is `pdf` (default) or `html`. The raw body is `cardreport.data/1` in JSON or YAML,
+is `pdf` (default) or `html`. `renderer` is `chromium` (default) or `weasyprint`.
+The raw body is `cardreport.data/1` in JSON or YAML,
 with the corresponding Content-Type. Content-Length is optional; chunked upload is
 supported. Gzip and other Content-Encoding values are rejected. The input cap is
 16 MiB, checked against both headers and actual streamed bytes. Dataset validity is
 checked later by the worker; malformed data may receive 202 and then fail.
 
-The 202 body contains `id`, `state`, `template_id`, `template_version`, `output`,
+The 202 body contains `id`, `state`, `template_id`, `template_version`, `output`, `renderer`,
 `status_url` and `content_url`; Location points to status. The UUID is not an access
 control mechanism. Lost responses can leave an accepted job; no idempotency key or
 submission retry is provided. Archive after admission does not invalidate that job.
@@ -82,3 +83,32 @@ Partial outputs are never discoverable through this endpoint.
 Upload concurrency/backlog limits return 429 and Retry-After; upload idle/total
 deadlines return 408. Temporary dependency failures return 503. See
 [operations](operations.md) for limits, terminal error codes, retries and retention.
+
+## Renderer selection
+
+Select an engine per submission, independently of the stored template and input
+format: `POST /v1/reports?template_id=monthly&output=pdf&renderer=weasyprint`.
+The selection is persisted, returned in acceptance/status responses and retained
+across retries. Omitted `renderer` and jobs created before this option use Chromium.
+Unknown names return 422 before upload. Both engines are installed in every worker;
+there is no automatic fallback or per-renderer queue.
+
+| Engine | PDF | HTML | Layout modes |
+| --- | --- | --- | --- |
+| `chromium` (default) | Playwright/Chromium | Self-contained preview; JavaScript required to draw charts | dashboard, flow |
+| `weasyprint` | SVG/WeasyPrint; no browser | Self-contained SVG preview; no JavaScript | dashboard only |
+
+PDF is the authoritative checked output. Chromium HTML does not run browser layout
+checks during generation; WeasyPrint measures layout during export, but another
+browser may lay out its HTML differently. WeasyPrint HTML has a fixed 30-second
+library export timeout; increasing the server attempt budget cannot extend it.
+A shorter attempt budget is still enforced by the supervisor. Both produce
+noninteractive charts.
+WeasyPrint has the library's experimental feature subset, including bars, lines and
+funnels. Flow/table splitting is unsupported and ends the job with
+`unsupported_feature` (`retryable=false`), including HTML requests. Template
+registration validates syntax independently of renderer capabilities. With the
+pinned library, a severely oversized dashboard table can produce `render_failed`
+instead of `layout_overflow` on WeasyPrint. Use Chromium flow for table pagination.
+See the
+[CardReport capability matrix](https://github.com/arch7tect/cardreport/blob/main/docs/user/renderers.md#capabilities).

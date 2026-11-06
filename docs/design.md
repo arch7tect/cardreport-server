@@ -30,8 +30,8 @@ webhooks, tenant isolation, arbitrary Python/HTML/CSS, plugins, resumable upload
 inline templates on generation, synchronous waiting, or a standalone SDK.
 CSV multipart upload is deferred; clients can use CardReport's existing CSV
 adapter to produce the same named-dataset envelope. This does not remove CSV
-support from the library. WeasyPrint is deferred as a server deployment option;
-the library keeps its existing experimental renderer.
+support from the library. Both Chromium and the library's experimental SVG/WeasyPrint
+renderer are included in the worker image and selected per job.
 
 ## 2. Relationship to CardReport
 
@@ -133,10 +133,13 @@ UTF-8 charset; there are no YAML media-type aliases in v1.
 
 `template_id` is required. `template_version` is optional: resolve latest at
 admission, before consuming the upload, then retain that immutable version.
-`output` is pdf (default) or html. PDF uses Chromium. HTML is the library's static preview: succeeded means artifact
-creation and semantic validation, not completed browser geometry checks. PDF
-performs geometric validation. There is no runtime layout,
-language or arbitrary renderer override: presentation belongs to the template;
+`output` is pdf (default) or html. `renderer` is chromium (default) or weasyprint,
+persisted per job and retained across retries. Both support PDF and HTML; WeasyPrint
+supports dashboard only and reports unsupported features without fallback. PDF is
+the authoritative checked output. Chromium HTML does not perform browser geometry
+checks at export; WeasyPrint HTML is measured but may differ in another browser.
+Every worker checks both engines at startup. There is no runtime layout,
+language or arbitrary renderer-class override: presentation belongs to the template;
 dynamic titles/text can be supplied through declared datasets. No general parameter
 or expression language is added. Execution limits come from server configuration.
 
@@ -160,7 +163,7 @@ Tagged decimals, dates and datetimes retain the library's existing semantics.
 
 Return 202 only when the complete input object exists and the queued job transaction
 has committed. Response contains id, state=queued, template_id, resolved
-template_version, output and relative status/content URLs. 202 means durable
+template_version, output, renderer and relative status/content URLs. 202 means durable
 acceptance, not successful data validation, binding or rendering.
 
 Metadata is checked before upload. Syntax, dataset types/cardinality and binding
@@ -232,7 +235,7 @@ Minimal tables:
 - templates: id, archived, created_at, latest_version.
 - template_versions: template_id/version, canonical JSON, digest, validated_with,
   created_at; immutable and referenced by jobs.
-- reports: UUID, template FK/version, state, input key/type/size/hash, output kind,
+- reports: UUID, template FK/version, state, input key/type/size/hash, output kind, selected renderer,
   result key/size/hash, attempt number/token, lease_until, next_attempt_at,
   created/started/finished times, retention timestamps, structured error,
   actual service/library/image versions.
@@ -387,11 +390,10 @@ network egress; do not let submitted data select URLs or execute code.
 ## 10. Technology and documentation plan
 
 Python 3.12+, uv, FastAPI/Uvicorn/Pydantic for HTTP/settings, psycopg 3 and its pool
-for explicit PostgreSQL operations, boto3 for S3, and cardreport[pdf] for rendering.
+for explicit PostgreSQL operations, boto3 for S3, and cardreport[pdf,weasyprint] for rendering.
 Use one standard SQL migration mechanism selected during the persistence slice;
 do not invent a general ORM/repository abstraction. Add runtime dependencies only
-when implemented and lock the deployment environment. The scaffold intentionally
-installs only development tooling. Chromium/fonts are installed at image build time.
+when implemented and lock the deployment environment. Chromium, fonts and WeasyPrint native libraries are installed at image build time.
 Bundle Swagger UI assets with the image so /docs works without CDN access.
 
 README remains the user entry. As implementation lands, add user quickstart with

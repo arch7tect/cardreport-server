@@ -44,7 +44,7 @@ Backlog admission is deliberately soft: concurrent in-flight uploads can oversho
 ## Failure and cleanup
 
 Data, binding, layout, unsupported-feature and render-timeout failures are terminal.
-A browser dependency failure stops claims. Transient database/storage faults and
+A renderer dependency failure stops claims. Transient database/storage faults and
 lost workers retry with bounded backoff and new attempt tokens. Execution is at
 least once, but only the current unexpired token can commit a result pointer.
 
@@ -66,7 +66,9 @@ no public delete, cancellation or arbitrary remote-data-fetch API.
 ## Observability
 
 `/health/live` is process liveness; `/health/ready` checks database revision/storage.
-Worker probes check recent supervisor progress after its real PDF startup smoke.
+Worker probes check recent supervisor progress after real PDF startup smokes for both
+Chromium and WeasyPrint. If either fails, the worker claims no jobs. Both runtimes
+are installed in the shared image; renderer selection is persisted per job.
 API `/metrics` exposes global job counts and oldest queue age: aggregate across API
 replicas with **max**, never sum. Worker port 9000 exposes per-worker active slots;
 sum those across workers. Monitoring API metrics requires the client label too. Labels contain states only, never IDs, data or chart text.
@@ -90,7 +92,7 @@ not throughput guarantees. Measure your own report shape and concurrency.
    exact revision gate intentionally rejects a newer schema. Otherwise keep admission
    paused and forward-fix; any offline backup restoration requires explicit approval.
 
-This unreleased development database moved through revisions 0001–0004. Revision
+This unreleased development database moved through revisions 0001–0005. Revision
 0003 repairs only initial synthetic-fixture digests after changing JSONB to JSON;
 there was no published user-data migration. Do not reuse this repair pattern to
 rewrite immutable production template versions silently.
@@ -110,3 +112,13 @@ rewrite immutable production template versions silently.
 | renderer_unavailable | Worker stops claiming; repair image/dependencies |
 | worker_lost | Lease expired after interruption; retry until the attempt cap |
 | queue_expired | Maximum age from original submission exceeded; terminal |
+
+### Renderer selection migration
+
+Schema revision `0005` adds the renderer field and assigns `chromium` to existing
+reports. Follow the coordinated upgrade above: pause admission, drain and stop old
+workers, apply `alembic upgrade head`, then start the matching API/worker image.
+The previous image expects `0004` and cannot be used as a live rollback after this
+migration. Use a forward fix; do not downgrade or rewrite applied migrations.
+The image installs Pango/Harfbuzz following the
+[WeasyPrint Debian installation guide](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#debian-11).

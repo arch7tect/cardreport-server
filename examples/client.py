@@ -21,6 +21,7 @@ def generate(
     destination: Path,
     template_id: str = "example",
     output: str = "pdf",
+    renderer: str = "chromium",
 ) -> dict[str, object]:
     with httpx.Client(base_url=base_url, timeout=150) as client:
 
@@ -43,6 +44,7 @@ def generate(
                 "template_id": template_id,
                 "template_version": registered.json()["version"],
                 "output": output,
+                "renderer": renderer,
             },
             content=chunks(data),
             headers={"Content-Type": media(data)},
@@ -80,6 +82,9 @@ if __name__ == "__main__":
         "--data", type=Path, default=Path("examples/reference_data.json")
     )
     parser.add_argument("--output", type=Path, default=Path("output/reference.pdf"))
+    parser.add_argument(
+        "--renderer", choices=["chromium", "weasyprint"], default="chromium"
+    )
     args = parser.parse_args()
     result = generate(
         args.url,
@@ -87,5 +92,6 @@ if __name__ == "__main__":
         args.data,
         args.output,
         output="html" if args.output.suffix == ".html" else "pdf",
+        renderer=args.renderer,
     )
     print(f"Saved {args.output}; job {result['id']}")

@@ -27,6 +27,7 @@ async def submit(
     template_id: Annotated[str, Query(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")],
     template_version: Annotated[int | None, Query(ge=1)] = None,
     output: jobs.Output = "pdf",
+    renderer: jobs.RendererName = "chromium",
 ) -> JSONResponse:
     ensure_admission(request)
     settings = request.app.state.settings
@@ -79,6 +80,7 @@ async def submit(
                         total,
                         digest.hexdigest(),
                         output,
+                        renderer,
                     )
             except TimeoutError:
                 raise APIError(
@@ -96,6 +98,7 @@ async def submit(
                 "template_id": template_id,
                 "template_version": admission.template_version,
                 "output": output,
+                "renderer": renderer,
                 "status_url": location,
                 "content_url": location + "/content",
             },

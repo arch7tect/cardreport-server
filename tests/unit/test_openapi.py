@@ -4,7 +4,9 @@ from typing import Any
 from cardreport import json_schema
 from jsonschema import Draft202012Validator
 
+from cardreport_server.api import create_app
 from cardreport_server.openapi import component_schemas
+from cardreport_server.settings import Settings
 
 
 def test_adaptation_preserves_validation(template_spec: dict[str, object]) -> None:
@@ -18,3 +20,13 @@ def test_adaptation_preserves_validation(template_spec: dict[str, object]) -> No
     for spec in (template_spec, {}, template_spec | {"unknown": 1}):
         assert original.is_valid(spec) == adapted.is_valid(spec)
     assert adapted.is_valid(template_spec)
+
+
+def test_renderer_choices_are_documented(settings: Settings) -> None:
+    parameters = create_app(settings).openapi()["paths"]["/v1/reports"]["post"][
+        "parameters"
+    ]
+    renderer = next(item for item in parameters if item["name"] == "renderer")
+    assert renderer["in"] == "query" and not renderer["required"]
+    assert renderer["schema"]["enum"] == ["chromium", "weasyprint"]
+    assert renderer["schema"]["default"] == "chromium"

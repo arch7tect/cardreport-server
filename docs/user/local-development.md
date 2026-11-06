@@ -28,7 +28,8 @@ docker compose --profile app up -d --wait api worker
 ```
 
 The container API is on port 18000 (`API_PORT`). Use `/health/live` and `/health/ready`.
-Run a real PDF smoke without application/database configuration:
+Run real PDF smokes for both Chromium and WeasyPrint without application/database configuration.
+The container includes their Python and native dependencies; no host browser/Pango installation is needed.
 
 ```sh
 docker run --rm cardreport-server:local /app/.venv/bin/python -m cardreport_server smoke

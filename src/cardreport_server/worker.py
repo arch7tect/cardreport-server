@@ -115,6 +115,7 @@ class Worker:
                     {
                         "input_type": attempt.input_type,
                         "output": attempt.output,
+                        "renderer": attempt.renderer,
                         "render_deadline": running.deadline
                         - self.settings.cleanup_grace
                         - self.settings.io_timeout * 4,
@@ -281,7 +282,7 @@ class Worker:
             env=child_environment(self.settings.temp_root),
         ) as smoke:
             try:
-                if smoke.wait(timeout=45) != 0:
+                if smoke.wait(timeout=75) != 0:
                     return 78
             except subprocess.TimeoutExpired:
                 recycle()

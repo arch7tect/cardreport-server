@@ -48,12 +48,19 @@ def main() -> None:
             storage.check()
             print("Storage ready")
         else:
-            from cardreport import KPI, Card, Report
+            from cardreport import (
+                KPI,
+                Card,
+                ChromiumRenderer,
+                Report,
+                WeasyPrintRenderer,
+            )
 
             report = Report("Renderer startup check")
-            report.add(Card(KPI("Total", 34)))
-            assert report.to_pdf(timeout=30).startswith(b"%PDF-")
-            print("CardReport PDF smoke passed")
+            report.row(Card(KPI("Total", 34)), height_mm=50)
+            for renderer in (ChromiumRenderer(), WeasyPrintRenderer()):
+                assert report.to_pdf(timeout=30, renderer=renderer).startswith(b"%PDF-")
+                print(f"{type(renderer).__name__} PDF smoke passed")
     except ValidationError:
         print(
             "Invalid service configuration; check documented settings", file=sys.stderr
