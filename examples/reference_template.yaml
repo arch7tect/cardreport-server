@@ -1,0 +1,196 @@
+# The original reference report, using standard YAML syntax.
+format: cardreport.template/1
+datasets:
+  summary:
+    cardinality: one
+    fields:
+      clients:
+        type: integer
+      call_attempted:
+        type: integer
+      call_attempted_note:
+        type: text
+      not_yet_called:
+        type: integer
+      not_yet_called_note:
+        type: text
+      2_of_5_identified_clients:
+        type: number
+      2_of_5_identified_clients_label:
+        type: text
+      promises:
+        type: integer
+      promised_amount:
+        type: integer
+  funnel:
+    cardinality: many
+    fields:
+      category:
+        type: text
+      count:
+        type: integer
+  attempts:
+    cardinality: many
+    fields:
+      category:
+        type: text
+      count:
+        type: integer
+  outcomes:
+    cardinality: many
+    fields:
+      outcome:
+        type: text
+      clients:
+        type: integer
+      rate:
+        type: number
+  payments:
+    cardinality: many
+    fields:
+      category:
+        type: text
+      count:
+        type: integer
+report:
+  page:
+    size:
+    - 564.444
+    - 423.333
+    orientation: portrait
+    margin_mm: 5.644
+  theme:
+    accent: '#20a6c4'
+    background: '#f5f5f5'
+    card_background: '#ffffff'
+    text: '#222222'
+    gap_mm: 5.644
+    padding_mm: 6.3
+    font_size_pt: 14
+    chart_height_mm: 95
+  blocks:
+  - type: row
+    children:
+    - type: card
+      title: Campaign progress
+      content:
+        type: column
+        children:
+        - type: kpi
+          label: Clients
+          value:
+            bind:
+              dataset: summary
+              field: clients
+          format: number
+        - type: row
+          children:
+          - type: kpi
+            label: Call attempted
+            value:
+              bind:
+                dataset: summary
+                field: call_attempted
+            format: number
+            note:
+              bind:
+                dataset: summary
+                field: call_attempted_note
+          - type: kpi
+            label: Not yet called
+            value:
+              bind:
+                dataset: summary
+                field: not_yet_called
+            format: number
+            note:
+              bind:
+                dataset: summary
+                field: not_yet_called_note
+    - type: card
+      title: Contact funnel
+      content:
+        type: bar
+        dataset: funnel
+        category: category
+        value: count
+        orientation: horizontal
+        show_labels: true
+    - type: card
+      title: Call attempt results
+      content:
+        type: bar
+        dataset: attempts
+        category: category
+        value: count
+        orientation: horizontal
+        show_labels: true
+    height_mm: 112.889
+  - type: row
+    children:
+    - type: card
+      title: Conversation outcomes
+      content:
+        type: table
+        dataset: outcomes
+        columns:
+        - key: outcome
+          label: Outcome
+          format: number
+          align: left
+          width: 3
+        - key: clients
+          label: Clients
+          format: number
+          align: center
+        - key: rate
+          label: '%'
+          format: percent
+          align: center
+    - type: card
+      title: Promise rate (PTP rate)
+      content:
+        type: column
+        children:
+        - type: kpi
+          label:
+            bind:
+              dataset: summary
+              field: 2_of_5_identified_clients_label
+          value:
+            bind:
+              dataset: summary
+              field: 2_of_5_identified_clients
+          format: percent
+        - type: row
+          children:
+          - type: kpi
+            label: Promises
+            value:
+              bind:
+                dataset: summary
+                field: promises
+            format: number
+          - type: kpi
+            label: Promised amount
+            value:
+              bind:
+                dataset: summary
+                field: promised_amount
+            format: number
+    widths:
+    - 2.03125
+    - 1
+    height_mm: 112.889
+  - type: row
+    children:
+    - type: card
+      title: Promised payments calendar
+      content:
+        type: bar
+        dataset: payments
+        category: category
+        value: count
+        orientation: vertical
+        show_labels: true
+    height_mm: 141.111

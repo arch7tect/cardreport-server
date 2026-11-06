@@ -1,0 +1,358 @@
+{
+  "format": "cardreport.data/1",
+  "datasets": {
+    "summary": {
+      "columns": [
+        "active_agents",
+        "automation_rate",
+        "sessions",
+        "clients",
+        "messages",
+        "minutes",
+        "ai_sessions",
+        "ai_clients"
+      ],
+      "rows": [
+        {
+          "active_agents": 16,
+          "automation_rate": 0.976,
+          "sessions": 58837,
+          "clients": 35612,
+          "messages": 2.7,
+          "minutes": 1.4,
+          "ai_sessions": 57418,
+          "ai_clients": 34534
+        }
+      ]
+    },
+    "trends": {
+      "columns": [
+        "day",
+        "sessions",
+        "clients",
+        "active_agents",
+        "automation_rate",
+        "messages",
+        "minutes"
+      ],
+      "rows": [
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-12"
+          },
+          "sessions": 713,
+          "clients": 437,
+          "active_agents": 9,
+          "automation_rate": 0.974,
+          "messages": 2.1,
+          "minutes": 1.2
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-13"
+          },
+          "sessions": 806,
+          "clients": 494,
+          "active_agents": 9,
+          "automation_rate": 0.976,
+          "messages": 2.2,
+          "minutes": 1.1
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-14"
+          },
+          "sessions": 744,
+          "clients": 456,
+          "active_agents": 9,
+          "automation_rate": 0.978,
+          "messages": 2.4,
+          "minutes": 1.0
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-15"
+          },
+          "sessions": 868,
+          "clients": 532,
+          "active_agents": 10,
+          "automation_rate": 0.977,
+          "messages": 2.3,
+          "minutes": 1.1
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-16"
+          },
+          "sessions": 1085,
+          "clients": 665,
+          "active_agents": 10,
+          "automation_rate": 0.976,
+          "messages": 2.1,
+          "minutes": 1.2
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-17"
+          },
+          "sessions": 1271,
+          "clients": 779,
+          "active_agents": 10,
+          "automation_rate": 0.973,
+          "messages": 2.1,
+          "minutes": 1.5
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-18"
+          },
+          "sessions": 1116,
+          "clients": 684,
+          "active_agents": 11,
+          "automation_rate": 0.969,
+          "messages": 2.2,
+          "minutes": 1.7
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-19"
+          },
+          "sessions": 1395,
+          "clients": 855,
+          "active_agents": 11,
+          "automation_rate": 0.97,
+          "messages": 2.3,
+          "minutes": 1.3
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-20"
+          },
+          "sessions": 1519,
+          "clients": 931,
+          "active_agents": 11,
+          "automation_rate": 0.975,
+          "messages": 2.4,
+          "minutes": 1.2
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-21"
+          },
+          "sessions": 1457,
+          "clients": 893,
+          "active_agents": 12,
+          "automation_rate": 0.977,
+          "messages": 2.8,
+          "minutes": 1.1
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-22"
+          },
+          "sessions": 1705,
+          "clients": 1045,
+          "active_agents": 12,
+          "automation_rate": 0.978,
+          "messages": 2.9,
+          "minutes": 1.1
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-23"
+          },
+          "sessions": 1581,
+          "clients": 969,
+          "active_agents": 12,
+          "automation_rate": 0.977,
+          "messages": 2.4,
+          "minutes": 1.2
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-24"
+          },
+          "sessions": 1860,
+          "clients": 1140,
+          "active_agents": 13,
+          "automation_rate": 0.976,
+          "messages": 2.2,
+          "minutes": 1.1
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-25"
+          },
+          "sessions": 1798,
+          "clients": 1102,
+          "active_agents": 13,
+          "automation_rate": 0.975,
+          "messages": 2.3,
+          "minutes": 1.0
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-26"
+          },
+          "sessions": 2015,
+          "clients": 1235,
+          "active_agents": 13,
+          "automation_rate": 0.974,
+          "messages": 2.3,
+          "minutes": 1.1
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-27"
+          },
+          "sessions": 1891,
+          "clients": 1159,
+          "active_agents": 14,
+          "automation_rate": 0.976,
+          "messages": 2.5,
+          "minutes": 1.3
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-28"
+          },
+          "sessions": 2232,
+          "clients": 1368,
+          "active_agents": 14,
+          "automation_rate": 0.979,
+          "messages": 2.4,
+          "minutes": 1.4
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-29"
+          },
+          "sessions": 2139,
+          "clients": 1311,
+          "active_agents": 14,
+          "automation_rate": 0.978,
+          "messages": 2.4,
+          "minutes": 1.1
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-30"
+          },
+          "sessions": 2418,
+          "clients": 1482,
+          "active_agents": 15,
+          "automation_rate": 0.977,
+          "messages": 2.5,
+          "minutes": 1.0
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-10-31"
+          },
+          "sessions": 2573,
+          "clients": 1577,
+          "active_agents": 15,
+          "automation_rate": 0.974,
+          "messages": 2.6,
+          "minutes": 1.1
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-11-01"
+          },
+          "sessions": 2449,
+          "clients": 1501,
+          "active_agents": 15,
+          "automation_rate": 0.972,
+          "messages": 2.9,
+          "minutes": 1.2
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-11-02"
+          },
+          "sessions": 2697,
+          "clients": 1653,
+          "active_agents": 16,
+          "automation_rate": 0.973,
+          "messages": 2.8,
+          "minutes": 1.5
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-11-03"
+          },
+          "sessions": 2914,
+          "clients": 1786,
+          "active_agents": 16,
+          "automation_rate": 0.975,
+          "messages": 2.7,
+          "minutes": 1.6
+        },
+        {
+          "day": {
+            "$type": "date",
+            "value": "2026-11-04"
+          },
+          "sessions": 2728,
+          "clients": 1672,
+          "active_agents": 16,
+          "automation_rate": 0.976,
+          "messages": 2.7,
+          "minutes": 1.4
+        }
+      ]
+    },
+    "agents": {
+      "columns": [
+        "agent",
+        "sessions"
+      ],
+      "rows": [
+        {
+          "agent": "Sales B3 · Voice",
+          "sessions": 11683
+        },
+        {
+          "agent": "Sales A · Voice",
+          "sessions": 11663
+        },
+        {
+          "agent": "Sales B1 · Voice",
+          "sessions": 11625
+        },
+        {
+          "agent": "Sales B2 · Voice",
+          "sessions": 11610
+        },
+        {
+          "agent": "Agent 5*",
+          "sessions": 7226
+        }
+      ]
+    }
+  }
+}

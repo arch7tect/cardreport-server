@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cardreport
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cardreport-config
+  namespace: cardreport
+data:
+  CARDREPORT_S3_BUCKET: cardreport
+  CARDREPORT_S3_PREFIX: cardreport/
+  CARDREPORT_WORKER_CONCURRENCY: '2'
+  CARDREPORT_CONTAINER: '1'
+  CARDREPORT_IMAGE_ID: cardreport-server:local

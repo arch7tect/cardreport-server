@@ -1,0 +1,55 @@
+[project]
+name = "cardreport-server"
+version = "0.1.0.dev0"
+description = "Internal HTTP service for CardReport templates and report generation"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Oleg Orlov" }]
+dependencies = [
+    "alembic>=1.15,<2",
+    "boto3>=1.37,<2",
+    "cardreport[pdf]==0.8.1",
+    "fastapi>=0.115,<1",
+    "prometheus-client>=0.21,<1",
+    "psycopg[binary,pool]>=3.2,<4",
+    "pydantic-settings>=2.8,<3",
+    "uvicorn>=0.34,<1",
+]
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+cardreport-server = "cardreport_server.__main__:main"
+
+[dependency-groups]
+dev = [
+    "boto3-stubs[s3]>=1.37,<2",
+    "httpx>=0.28,<1",
+    "mypy>=1.15,<3",
+    "pytest>=8,<10",
+    "pyyaml>=6,<7",
+    "ruff>=0.17.3,<0.18",
+    "types-jsonschema>=4.26.0.20261006",
+    "types-psutil>=7",
+    "types-pyyaml>=6.0.12.20261103",
+]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+python_version = "3.12"
+strict = true
+files = ["src", "tests", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = ["integration: requires real PostgreSQL and S3", "container: requires the isolated Compose app stack"]

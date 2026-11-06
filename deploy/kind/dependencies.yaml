@@ -1,0 +1,105 @@
+# Disposable local test data and development-only credentials. Never use in production.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cardreport-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cardreport-postgres
+  template:
+    metadata:
+      labels:
+        app: cardreport-postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:18.0-bookworm@sha256:3f55f8895c4ed50603e2fbdfc72fffeeaba3173321fee5cb825bbbeb30d9d854
+        env:
+        - name: POSTGRES_USER
+          value: cardreport
+        - name: POSTGRES_PASSWORD
+          value: local-db-only
+        - name: POSTGRES_DB
+          value: cardreport
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql
+      volumes:
+      - name: data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cardreport-postgres
+spec:
+  selector:
+    app: cardreport-postgres
+  ports:
+  - port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cardreport-s3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cardreport-s3
+  template:
+    metadata:
+      labels:
+        app: cardreport-s3
+    spec:
+      containers:
+      - name: s3
+        image: chrislusf/seaweedfs:4.52@sha256:57877e32bb90073b37dc109b438ba66e84fd5ed9ced5f5c04f56444ef243ce59
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          value: cardreport-local
+        - name: AWS_SECRET_ACCESS_KEY
+          value: local-storage-only
+        - name: S3_BUCKET
+          value: cardreport
+        ports:
+        - containerPort: 8333
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        args:
+        - mini
+        - -dir=/data
+        # Mini advertises internal ports to itself; only S3 is exposed by the Service.
+        - -ip=127.0.0.1
+        - -ip.bind=0.0.0.0
+        - -admin.ui=false
+        - -webdav=false
+      volumes:
+      - name: data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cardreport-s3
+spec:
+  selector:
+    app: cardreport-s3
+  ports:
+  - port: 8333
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cardreport-secrets
+type: Opaque
+stringData:
+  CARDREPORT_DATABASE_URL: postgresql://cardreport:local-db-only@cardreport-postgres:5432/cardreport
+  CARDREPORT_S3_ENDPOINT: http://cardreport-s3:8333
+  CARDREPORT_S3_ACCESS_KEY: cardreport-local
+  CARDREPORT_S3_SECRET_KEY: local-storage-only

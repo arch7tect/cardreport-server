@@ -1,0 +1,11 @@
+.git
+.venv
+.env
+.env.*
+local
+output
+.idea
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache

@@ -1,0 +1,405 @@
+{
+  "format": "cardreport.template/1",
+  "datasets": {
+    "summary": {
+      "cardinality": "one",
+      "fields": {
+        "active_agents": {
+          "type": "integer"
+        },
+        "automation_rate": {
+          "type": "number"
+        },
+        "sessions": {
+          "type": "integer"
+        },
+        "clients": {
+          "type": "integer"
+        },
+        "messages": {
+          "type": "number"
+        },
+        "minutes": {
+          "type": "number"
+        },
+        "ai_sessions": {
+          "type": "integer"
+        },
+        "ai_clients": {
+          "type": "integer"
+        }
+      }
+    },
+    "trends": {
+      "cardinality": "many",
+      "fields": {
+        "day": {
+          "type": "date"
+        },
+        "sessions": {
+          "type": "number"
+        },
+        "clients": {
+          "type": "number"
+        },
+        "active_agents": {
+          "type": "number"
+        },
+        "automation_rate": {
+          "type": "number"
+        },
+        "messages": {
+          "type": "number"
+        },
+        "minutes": {
+          "type": "number"
+        }
+      }
+    },
+    "agents": {
+      "cardinality": "many",
+      "fields": {
+        "agent": {
+          "type": "text"
+        },
+        "sessions": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "report": {
+    "title": "AI operations",
+    "subtitle": "Service performance · Snapshot overview",
+    "page": {
+      "size": [
+        420,
+        250
+      ],
+      "margin_mm": 8
+    },
+    "theme": {
+      "accent": "#087f8c",
+      "background": "#f3f6f8",
+      "card_background": "#ffffff",
+      "text": "#17313b",
+      "font_size_pt": 11,
+      "kpi_value_size_pt": 38,
+      "padding_mm": 5,
+      "gap_mm": 4
+    },
+    "formatting": {
+      "date_format": "dd MMM",
+      "number_decimals": 1,
+      "percent_decimals": 1
+    },
+    "blocks": [
+      {
+        "type": "row",
+        "widths": [
+          1,
+          1,
+          2
+        ],
+        "height_mm": 66,
+        "children": [
+          {
+            "type": "card",
+            "title": "Active AI agents",
+            "content": {
+              "type": "column",
+              "heights": [
+                2,
+                1
+              ],
+              "children": [
+                {
+                  "type": "kpi",
+                  "label": "",
+                  "value": {
+                    "bind": {
+                      "dataset": "summary",
+                      "field": "active_agents"
+                    }
+                  },
+                  "format": "integer"
+                },
+                {
+                  "type": "line",
+                  "dataset": "trends",
+                  "x": "day",
+                  "value": "active_agents",
+                  "x_kind": "date",
+                  "axes": false,
+                  "markers": false,
+                  "legend": false,
+                  "fill": "zero"
+                }
+              ]
+            }
+          },
+          {
+            "type": "card",
+            "title": "Automation rate",
+            "content": {
+              "type": "column",
+              "heights": [
+                2,
+                1
+              ],
+              "children": [
+                {
+                  "type": "kpi",
+                  "label": "without Human Agent",
+                  "value": {
+                    "bind": {
+                      "dataset": "summary",
+                      "field": "automation_rate"
+                    }
+                  },
+                  "format": "percent"
+                },
+                {
+                  "type": "line",
+                  "dataset": "trends",
+                  "x": "day",
+                  "value": "automation_rate",
+                  "x_kind": "date",
+                  "axes": false,
+                  "markers": false,
+                  "legend": false,
+                  "fill": "none"
+                }
+              ]
+            }
+          },
+          {
+            "type": "card",
+            "title": "Top 5 most active AI agents",
+            "content": {
+              "type": "bar",
+              "dataset": "agents",
+              "category": "agent",
+              "value": "sessions",
+              "color_by": "category",
+              "legend_position": "left",
+              "category_labels": false,
+              "show_labels": true,
+              "value_format": "integer"
+            }
+          }
+        ]
+      },
+      {
+        "type": "row",
+        "height_mm": 66,
+        "children": [
+          {
+            "type": "card",
+            "title": "Total sessions",
+            "content": {
+              "type": "column",
+              "heights": [
+                2,
+                1
+              ],
+              "children": [
+                {
+                  "type": "kpi",
+                  "label": "",
+                  "value": {
+                    "bind": {
+                      "dataset": "summary",
+                      "field": "sessions"
+                    }
+                  },
+                  "format": "integer"
+                },
+                {
+                  "type": "line",
+                  "dataset": "trends",
+                  "x": "day",
+                  "value": "sessions",
+                  "x_kind": "date",
+                  "axes": false,
+                  "markers": false,
+                  "legend": false,
+                  "fill": "zero"
+                }
+              ]
+            }
+          },
+          {
+            "type": "card",
+            "title": "Serviced clients",
+            "content": {
+              "type": "column",
+              "heights": [
+                2,
+                1
+              ],
+              "children": [
+                {
+                  "type": "kpi",
+                  "label": "",
+                  "value": {
+                    "bind": {
+                      "dataset": "summary",
+                      "field": "clients"
+                    }
+                  },
+                  "format": "integer"
+                },
+                {
+                  "type": "line",
+                  "dataset": "trends",
+                  "x": "day",
+                  "value": "clients",
+                  "x_kind": "date",
+                  "axes": false,
+                  "markers": false,
+                  "legend": false,
+                  "fill": "zero"
+                }
+              ]
+            }
+          },
+          {
+            "type": "card",
+            "title": "Average messages",
+            "content": {
+              "type": "column",
+              "heights": [
+                2,
+                1
+              ],
+              "children": [
+                {
+                  "type": "kpi",
+                  "label": "per session",
+                  "value": {
+                    "bind": {
+                      "dataset": "summary",
+                      "field": "messages"
+                    }
+                  },
+                  "format": "number"
+                },
+                {
+                  "type": "line",
+                  "dataset": "trends",
+                  "x": "day",
+                  "value": "messages",
+                  "x_kind": "date",
+                  "axes": false,
+                  "markers": false,
+                  "legend": false,
+                  "fill": "zero"
+                }
+              ]
+            }
+          },
+          {
+            "type": "card",
+            "title": "Average minutes",
+            "content": {
+              "type": "column",
+              "heights": [
+                2,
+                1
+              ],
+              "children": [
+                {
+                  "type": "kpi",
+                  "label": "per session",
+                  "value": {
+                    "bind": {
+                      "dataset": "summary",
+                      "field": "minutes"
+                    }
+                  },
+                  "format": "number"
+                },
+                {
+                  "type": "line",
+                  "dataset": "trends",
+                  "x": "day",
+                  "value": "minutes",
+                  "x_kind": "date",
+                  "axes": false,
+                  "markers": false,
+                  "legend": false,
+                  "fill": "zero"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "type": "row",
+        "widths": [
+          1,
+          1,
+          2
+        ],
+        "height_mm": 62,
+        "children": [
+          {
+            "type": "card",
+            "title": "AI agent sessions",
+            "content": {
+              "type": "kpi",
+              "label": "Handled by AI agent",
+              "value": {
+                "bind": {
+                  "dataset": "summary",
+                  "field": "ai_sessions"
+                }
+              },
+              "format": "integer"
+            }
+          },
+          {
+            "type": "card",
+            "title": "Clients served by AI",
+            "content": {
+              "type": "kpi",
+              "label": "Handled by AI agent",
+              "value": {
+                "bind": {
+                  "dataset": "summary",
+                  "field": "ai_clients"
+                }
+              },
+              "format": "integer"
+            }
+          },
+          {
+            "type": "card",
+            "title": "About this report",
+            "content": {
+              "type": "column",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Snapshot values transcribed from an operations dashboard screenshot."
+                },
+                {
+                  "type": "text",
+                  "text": "Trend lines are synthetic demonstration data. They are not historical observations.",
+                  "style": "caption"
+                },
+                {
+                  "type": "text",
+                  "text": "* The fifth agent name was not visible in the source. The top-five counts are preserved.",
+                  "style": "caption"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

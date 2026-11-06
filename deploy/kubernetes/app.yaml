@@ -1,0 +1,193 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cardreport-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cardreport
+      role: api
+  template:
+    metadata:
+      labels:
+        app: cardreport
+        role: api
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 140
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: api
+        image: cardreport-server:local
+        imagePullPolicy: IfNotPresent
+        args:
+        - /app/.venv/bin/python
+        - -m
+        - cardreport_server
+        - api
+        - --host
+        - 0.0.0.0
+        envFrom:
+        - configMapRef:
+            name: cardreport-config
+        - secretRef:
+            name: cardreport-secrets
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+            ephemeral-storage: 256Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+            ephemeral-storage: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: temporary
+          mountPath: /tmp
+        ports:
+        - name: http
+          containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 12
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+      volumes:
+      - name: temporary
+        emptyDir:
+          sizeLimit: 512Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cardreport-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cardreport
+      role: worker
+  template:
+    metadata:
+      labels:
+        app: cardreport
+        role: worker
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 140
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: worker
+        image: cardreport-server:local
+        imagePullPolicy: IfNotPresent
+        args:
+        - /app/.venv/bin/python
+        - -m
+        - cardreport_server
+        - worker
+        envFrom:
+        - configMapRef:
+            name: cardreport-config
+        - secretRef:
+            name: cardreport-secrets
+        resources:
+          requests:
+            cpu: 500m
+            memory: 768Mi
+            ephemeral-storage: 256Mi
+          limits:
+            cpu: '2'
+            memory: 2Gi
+            ephemeral-storage: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: temporary
+          mountPath: /tmp
+        ports:
+        - name: metrics
+          containerPort: 9000
+        readinessProbe: &id001
+          exec: &id002
+            command:
+            - /app/.venv/bin/python
+            - -m
+            - cardreport_server
+            - worker-health
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe: *id001
+        startupProbe:
+          exec: *id002
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 18
+      volumes:
+      - name: temporary
+        emptyDir:
+          sizeLimit: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cardreport-api
+spec:
+  selector:
+    app: cardreport
+    role: api
+  ports:
+  - port: 8000
+    targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cardreport-worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cardreport-worker
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300

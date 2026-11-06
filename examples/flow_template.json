@@ -1,0 +1,1 @@
+{"format":"cardreport.template/1","datasets":{"items":{"cardinality":"many","fields":{"id":{"type":"text"},"amount":{"type":"integer"}}}},"report":{"title":"Long table example","mode":"flow","blocks":[{"type":"card","content":{"type":"table","dataset":"items","columns":[{"key":"id","label":"Item"},{"key":"amount","label":"Amount"}]}}]}}
