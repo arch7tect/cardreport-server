@@ -21,7 +21,7 @@ def test_background_work_cannot_exceed_shutdown_budget(
 from cardreport_server.settings import Settings
 from cardreport_server.worker import Worker
 from cardreport_server import jobs, maintenance
-settings=Settings(database_url='postgresql://test:test@localhost/test',s3_endpoint='http://localhost:8333',s3_access_key='test',s3_secret_key='test',s3_bucket='unit-test',shutdown_grace=2,poll_seconds=.05)
+settings=Settings(database_url='postgresql://test:test@localhost/test',s3_endpoint='http://localhost:8333',s3_access_key='test',s3_secret_key='test',s3_bucket='unit-test',shutdown_grace=2,poll_seconds=30)
 worker=Worker(settings)
 worker.db.open=lambda: None
 worker.db.close=lambda: None
@@ -30,7 +30,7 @@ jobs.claim=lambda *args: None
 jobs.reap=lambda *args: 0
 maintenance.OrphanSweep.run=lambda *args: None
 def blocked(*args):
- worker.stopping.set()
+ worker.stop()
  time.sleep(30)
 maintenance.maintain=blocked
 if STAGE == 'attempt_io':

@@ -14,9 +14,11 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from importlib.metadata import version
 from pathlib import Path
+from queue import Empty, SimpleQueue
 from uuid import UUID, uuid4
 
 from botocore.exceptions import BotoCoreError, ClientError
+from prometheus_client import Gauge, start_http_server
 from psycopg import InterfaceError, OperationalError
 from psycopg_pool import PoolTimeout
 
@@ -64,6 +66,12 @@ class Worker:
         self.stopping = threading.Event()
         self.broken = threading.Event()
         self.active: dict[str, Running] = {}
+        # CPython SimpleQueue.put is reentrant when a signal interrupts get().
+        self._wakeups: SimpleQueue[None] = SimpleQueue()
+
+    def stop(self) -> None:
+        self.stopping.set()
+        self._wakeups.put(None)
 
     def execute(self, running: Running) -> None:
         attempt = running.attempt
@@ -143,6 +151,7 @@ class Worker:
             running.process = process
             if running.cancelled.is_set():
                 running.stop()
+                self._wakeups.put(None)
             process.wait()
             if running.cancelled.is_set() and process.returncode == -signal.SIGTERM:
                 return
@@ -154,6 +163,7 @@ class Worker:
                 return
             if outcome.get("code") == "renderer_unavailable":
                 self.broken.set()
+                self._wakeups.put(None)
                 jobs.retry(self.db, self.settings, attempt, "renderer_unavailable")
                 return
             if not outcome.get("ok"):
@@ -286,12 +296,15 @@ class Worker:
                     return 78
             except subprocess.TimeoutExpired:
                 recycle()
-        signal.signal(signal.SIGTERM, lambda *_: self.stopping.set())
-        signal.signal(signal.SIGINT, lambda *_: self.stopping.set())
-        from prometheus_client import Gauge, start_http_server
+        signal.signal(signal.SIGTERM, lambda *_: self.stop())
+        signal.signal(signal.SIGINT, lambda *_: self.stop())
 
         slots = Gauge("cardreport_worker_active_slots", "Active slots in this worker")
         start_http_server(9000)
+        return self._supervise(slots)
+
+    def _supervise(self, slots: Gauge) -> int:
+        next_claim = 0.0
         next_heartbeat = 0.0
         next_maintenance = 0.0
         stop_deadline: float | None = None
@@ -310,7 +323,13 @@ class Worker:
         ) as executor:
             try:
                 while True:
-                    slots.set(len(self.active))
+                    # Drain before observing state, so completions before wait are not lost.
+                    while True:
+                        try:
+                            self._wakeups.get_nowait()
+                        except Empty:
+                            break
+                    claimed = False
                     now = time.monotonic()
                     if (
                         self.stopping.is_set() or self.broken.is_set()
@@ -325,6 +344,7 @@ class Worker:
                             except BaseException:
                                 recycle()
                             del self.active[key]
+                            next_claim = 0.0
                             continue
                         if now >= min(
                             running.deadline, running.lease_ok_until
@@ -375,38 +395,47 @@ class Worker:
                                             "Maintenance dependency unavailable"
                                         )
                                 maintenance_future = executor.submit(maintenance)
+                                maintenance_future.add_done_callback(
+                                    lambda _: self._wakeups.put(None)
+                                )
                                 next_maintenance = (
                                     time.monotonic()
                                     + self.settings.maintenance_interval
                                 )
-                            if len(self.active) < self.settings.worker_concurrency:
+                            if (
+                                len(self.active) < self.settings.worker_concurrency
+                                and time.monotonic() >= next_claim
+                                and not self.stopping.is_set()
+                                and not self.broken.is_set()
+                            ):
                                 claim_start = time.monotonic()
                                 attempt = jobs.claim(self.db, self.settings)
                                 if attempt is None:
-                                    HEALTH.write_text(
-                                        json.dumps(
-                                            {
-                                                "time": time.monotonic(),
-                                                "ready": True,
-                                                "active": len(self.active),
-                                            }
-                                        )
+                                    next_claim = (
+                                        time.monotonic() + self.settings.poll_seconds
                                     )
-                                    time.sleep(self.settings.poll_seconds)
-                                    continue
-                                # DB timestamps provide the budget without assuming host/DB wall clocks agree.
-                                running = Running(
-                                    attempt,
-                                    claim_start + self.settings.attempt_timeout,
-                                    claim_start + self.settings.lease_seconds,
-                                )
-                                running.future = executor.submit(self.execute, running)
-                                self.active[str(attempt.token)] = running
+                                else:
+                                    # DB timestamps provide the budget without assuming host/DB wall clocks agree.
+                                    running = Running(
+                                        attempt,
+                                        claim_start + self.settings.attempt_timeout,
+                                        claim_start + self.settings.lease_seconds,
+                                    )
+                                    running.future = executor.submit(
+                                        self.execute, running
+                                    )
+                                    self.active[str(attempt.token)] = running
+                                    running.future.add_done_callback(
+                                        lambda _: self._wakeups.put(None)
+                                    )
+                                    claimed = True
                         except Exception as error:
+                            next_claim = time.monotonic() + self.settings.poll_seconds
                             log.warning(
                                 "Worker dependency unavailable (%s)",
                                 type(error).__name__,
                             )
+                    slots.set(len(self.active))
                     HEALTH.write_text(
                         json.dumps(
                             {
@@ -421,7 +450,43 @@ class Worker:
                             break
                         if time.monotonic() >= stop_deadline:
                             recycle()
-                    time.sleep(self.settings.poll_seconds)
+                    if claimed:
+                        continue
+                    deadlines = [
+                        time.monotonic() + self.settings.poll_seconds,
+                        next_heartbeat,
+                    ]
+                    if stop_deadline is not None:
+                        deadlines.append(stop_deadline)
+                        if any(not r.cancelled.is_set() for r in self.active.values()):
+                            deadlines.append(
+                                stop_deadline - self.settings.cleanup_grace
+                            )
+                    else:
+                        if len(self.active) < self.settings.worker_concurrency:
+                            deadlines.append(next_claim)
+                        if maintenance_future is None or maintenance_future.done():
+                            deadlines.append(next_maintenance)
+                    for running in self.active.values():
+                        if not running.cancelled.is_set():
+                            deadlines.append(
+                                min(running.deadline, running.lease_ok_until)
+                                - self.settings.cleanup_grace
+                            )
+                        elif (
+                            running.stopped_at is not None
+                            and running.process is not None
+                            and running.process.poll() is None
+                        ):
+                            deadlines.append(
+                                running.stopped_at + self.settings.cleanup_grace
+                            )
+                    try:
+                        self._wakeups.get(
+                            timeout=max(0.0, min(deadlines) - time.monotonic())
+                        )
+                    except Empty:
+                        pass
             except BaseException:
                 recycle()
         self.db.close()

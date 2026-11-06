@@ -44,6 +44,12 @@ retains the isolated stack and logs under local/; success removes only resources
 created by that run. `--keep` retains a successful run for diagnosis. Do not run
 container tests against a developer stack or while another test suite mutates it.
 
+Deterministic unit tests cover slot filling, completion-before-wait races, empty
+queue backoff and deadline servicing. Container checks also exercise real threads
+and SIGTERM with a 30-second poll interval, including blocked shutdown work.
+See the [worker scheduling review](reviews/2026-11-07-worker-loop.md) for the
+accepted race fixes and verification scope.
+
 The native tests cover TCP chunked intake, stalled/disconnected uploads, PostgreSQL
 locking/fencing, retention and storage failure injection. Fault tests use exact
 container IDs verified against the unique Compose label. They never kill a process

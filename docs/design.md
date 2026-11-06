@@ -256,8 +256,11 @@ Use DB time for leases and deadlines. An independent supervisor heartbeats while
 child processes are busy; a worker with exhausted slots stops claiming. Claim FIFO
 by created_at/id among jobs whose next_attempt_at has passed. Add a partial index
 on (next_attempt_at, created_at, id) WHERE state='queued'. Poll at a configurable
-interval with jitter and immediately when a slot frees. Batch heartbeat updates
-per tick. Maximum queue age always counts from original created_at, not requeue.
+interval when the queue is empty or a claim fails, and immediately when a slot
+frees. After each successful claim, repeat the supervisor loop without waiting to
+fill the remaining slots, checking deadlines/heartbeat/stop between claims. Local
+completion and stop notifications wake a bounded wait; they do not replace polling
+for newly submitted database jobs. Batch heartbeat updates per tick. Maximum queue age always counts from original created_at, not requeue.
 
 Every heartbeat and completion/retry update is conditional on report id, state,
 attempt token and an unexpired lease. Expired leases cannot be revived. On lost
