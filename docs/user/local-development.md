@@ -27,7 +27,8 @@ docker compose --profile app run --rm migrate
 docker compose --profile app up -d --wait api worker
 ```
 
-The container API is on port 18000 (`API_PORT`). Use `/health/live` and `/health/ready`.
+The container API is on port 18000 (`API_PORT`); open `/ui/` for the web console
+and `/docs` for Swagger. The native API serves the same paths on port 8000. Use `/health/live` and `/health/ready`.
 Run real PDF smokes for both Chromium and WeasyPrint without application/database configuration.
 The container includes their Python and native dependencies; no host browser/Pango installation is needed.
 

@@ -5,6 +5,8 @@ Date: 2026-11-06. Owner: Oleg Orlov.
 Scope: a separate project alongside CardReport, not a library refactor.
 
 For the current implementation, see [architecture and worker lifecycle](architecture.md).
+The later [web console design](ui-design.md) extends this original scope with
+textual template editing, history and HTML preview; it adds no visual designer.
 
 ## 1. Purpose and boundaries
 

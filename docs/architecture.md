@@ -175,6 +175,26 @@ Deployment commands and acceptance limits are in the
 [Kubernetes guide](user/kubernetes.md). The supplied resource values are starting
 points, not a measured production capacity guarantee.
 
+## Web console and history
+
+The API also serves the console at `/ui/`, with native JavaScript modules and CSS
+packaged in the same image. It calls the public API; no frontend service or durable
+browser state is involved. Swagger and console assets have separate mounts and
+headers. Template editing creates new immutable versions.
+
+`GET /v1/reports` exposes retained public job metadata with template/state filters
+and keyset pagination by `(created_at, id)` descending. Cursors carry position,
+not database snapshots or access permissions; deleted boundary rows do not break
+continuation. Existing status and list responses share an explicit field projection.
+History has two indexes applied through an explicit schema migration.
+
+HTML content can be streamed inline using the same expiry and download checks.
+The console uses a sandboxed iframe; the response CSP allows embedded chart scripts
+while blocking parent-origin access and resource fetches. Self-navigation remains
+possible, so this is not a sandbox for arbitrary hostile HTML. Inputs remain
+validated templates/data rendered by CardReport. PDF remains download-only.
+See the [console guide](user/web-console.md) and [API](user/api.md) for usage.
+
 ## Before a worker sees a job
 
 1. The API validates request metadata: admission state, media type, size headers,

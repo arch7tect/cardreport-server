@@ -3,7 +3,7 @@
 import hashlib
 import tempfile
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 import anyio
@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 
-from . import jobs
+from . import history, jobs
 from .errors import APIError
 from .intake import media_type
 from .openapi import request_schema
@@ -109,6 +109,25 @@ async def submit(
         limiter.release()
 
 
+@router.get("")
+def report_history(
+    request: Request,
+    template_id: Annotated[
+        str | None, Query(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    ] = None,
+    state: history.State | None = None,
+    after: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> dict[str, Any]:
+    return history.list_reports(
+        request.app.state.database,
+        template_id=template_id,
+        state=state,
+        after=after,
+        limit=limit,
+    )
+
+
 @router.get("/{report_id}")
 def report_status(report_id: UUID, request: Request) -> dict[str, Any]:
     return jobs.status(request.app.state.database, report_id)
@@ -118,7 +137,11 @@ def report_status(report_id: UUID, request: Request) -> dict[str, Any]:
     "/{report_id}/content",
     responses={200: {"content": {"application/pdf": {}, "text/html": {}}}},
 )
-async def report_content(report_id: UUID, request: Request) -> Any:
+async def report_content(
+    report_id: UUID,
+    request: Request,
+    disposition: Literal["attachment", "inline"] = "attachment",
+) -> Any:
     from .downloads import download
 
-    return await download(report_id, request)
+    return await download(report_id, request, disposition)

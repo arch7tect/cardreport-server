@@ -37,7 +37,7 @@ Configure worker slots, retries and timeouts in `.env`; see
 [configuration and budgets](docs/user/operations.md#configuration-and-budgets).
 
 The example saves `output/reference.pdf`. Open [local Swagger](http://127.0.0.1:18000/docs)
-for the API. Everything needed for rendering and Swagger is in the app image;
+for the API, or the [web console](http://127.0.0.1:18000/ui/) to manage templates, generate reports and browse results. Everything needed for rendering and Swagger is in the app image;
 no external browser assets are fetched. Stop with `docker compose --profile app stop`;
 named volumes retain local data.
 
@@ -68,6 +68,7 @@ uncertain response: it can create a duplicate job.
 ## Documentation
 
 - [Python quickstart and JSON/YAML examples](docs/user/quickstart.md)
+- [Web console](docs/user/web-console.md)
 - [HTTP API, status and error contract](docs/user/api.md)
 - [Local Compose and PyCharm setup](docs/user/local-development.md)
 - [Configuration, recovery, retention and upgrades](docs/user/operations.md)
@@ -82,6 +83,7 @@ code execution, SQL connector, URL data fetcher, broker, or separate scheduler.
 
 [Implemented architecture and worker lifecycle](docs/architecture.md) ·
 [Design](docs/design.md) · [Implementation plan](docs/implementation-plan.md) ·
+[Web console design](docs/ui-design.md) · [Web console implementation plan](docs/ui-implementation-plan.md) ·
 [Design review](docs/reviews/2026-11-06-design.md) · [Plan review](docs/reviews/2026-11-06-implementation-plan.md) ·
 [Renderer review and checks](docs/reviews/2026-11-07-renderers.md)
 

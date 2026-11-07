@@ -23,6 +23,7 @@ from .reports import router as reports_router
 from .settings import Settings
 from .storage import Storage
 from .templates import router as templates_router
+from .ui import ConsoleFiles
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -107,6 +108,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ):
         app.add_exception_handler(error_type, unavailable)
 
+    app.mount(
+        "/ui",
+        ConsoleFiles(directory=Path(__file__).parent / "web", html=True),
+        name="console",
+    )
     app.mount(
         "/static",
         StaticFiles(directory=Path(__file__).parent / "static"),

@@ -29,6 +29,7 @@ dev = [
     "boto3-stubs[s3]>=1.37,<2",
     "httpx>=0.28,<1",
     "mypy>=1.15,<3",
+    "playwright>=1.64,<2",
     "pytest>=8,<10",
     "pyyaml>=6,<7",
     "ruff>=0.17.3,<0.18",
@@ -52,4 +53,4 @@ files = ["src", "tests", "scripts"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
-markers = ["integration: requires real PostgreSQL and S3", "container: requires the isolated Compose app stack"]
+markers = ["integration: requires real PostgreSQL and S3", "container: requires the isolated Compose app stack", "ui: requires isolated Compose app and Playwright Chromium"]

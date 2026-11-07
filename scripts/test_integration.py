@@ -27,7 +27,12 @@ def main() -> None:
         action="store_true",
         help="Build and test API/worker containers, including recovery",
     )
+    parser.add_argument(
+        "--ui", action="store_true", help="Run browser checks after container checks"
+    )
     args, extra = parser.parse_known_args()
+    if args.ui and not args.containers:
+        parser.error("--ui requires --containers")
     run_id = uuid.uuid4().hex[:10]
     project = "cardreport-test-" + run_id
     folder = ROOT / "local" / project
@@ -50,6 +55,7 @@ def main() -> None:
         "S3_BUCKET": "cardreport-test",
         "S3_PREFIX": "test/" + run_id + "/",
         "CARDREPORT_TEST_RUN": "1",
+        "CARDREPORT_TEST_ARTIFACTS": str(folder),
         "CARDREPORT_DATABASE_URL": f"postgresql://cardreport:local-db-only@127.0.0.1:{pg_port}/cardreport_test",
         "CARDREPORT_S3_ENDPOINT": f"http://127.0.0.1:{s3_port}",
         "CARDREPORT_S3_ACCESS_KEY": "cardreport-local",
@@ -104,6 +110,19 @@ def main() -> None:
                 "worker",
             )
             run("uv", "run", "pytest", "tests/container", "-q")
+            if args.ui:
+                run(
+                    "docker",
+                    "compose",
+                    "--profile",
+                    "app",
+                    "up",
+                    "-d",
+                    "--wait",
+                    "api",
+                    "worker",
+                )
+                run("uv", "run", "pytest", "tests/ui", "-q")
         succeeded = True
     finally:
         with (folder / "compose.log").open("w") as log:

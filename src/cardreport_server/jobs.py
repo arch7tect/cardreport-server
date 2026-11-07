@@ -9,6 +9,7 @@ from psycopg.types.json import Jsonb
 
 from .db import Database
 from .errors import APIError
+from .history import STATUS_COLUMNS
 from .settings import Settings
 
 Output = Literal["pdf", "html"]
@@ -105,10 +106,7 @@ def enqueue(
 def status(db: Database, report_id: UUID) -> dict[str, Any]:
     with db.pool.connection() as conn:
         row = conn.execute(
-            """SELECT id,template_id,template_version,state,output_kind AS output,renderer,
-            attempt_no AS attempts,created_at,started_at,finished_at,result_expires_at,
-            error,terminal_state,engine_version,image_id,service_version
-            FROM reports WHERE id=%s""",
+            f"SELECT {STATUS_COLUMNS} FROM reports WHERE id=%s",
             (report_id,),
         ).fetchone()
     if row is None:

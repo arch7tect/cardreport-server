@@ -64,3 +64,26 @@ validity. It requires the port-forward from that recipe and Metrics Server.
 
 Unit checks require the Docker Compose CLI for configuration interpolation; no
 Docker daemon or running service is needed for that check.
+
+## Browser console checks
+
+Python Playwright and local pytest fixtures exercise the console in Chromium; no
+Node toolchain or frontend build is needed. Install the browser once on a developer
+host (`--with-deps` also installs Linux system packages in CI):
+
+```sh
+uv run playwright install chromium
+uv run python scripts/test_integration.py --containers --ui
+```
+
+`--ui` requires `--containers` and runs after container fault checks, against the
+same isolated ready stack. Failure traces/screenshots use that run's ignored
+`local/cardreport-test-*/ui-*` files. Required browser absence is a failure, not a
+skipped suite. Use `--keep` to retain a successful isolated stack for inspection.
+
+Verify packaged static assets independently of the source checkout with
+`uv run python scripts/check_package.py`. It builds a wheel and installs it into
+an isolated uv environment before checking console/Swagger routes. Browser fixtures
+use real services for the main workflow and intercepted responses for deterministic
+error/polling edges; synthetic HTML probes are test-owned S3 fixtures, not public
+test endpoints.

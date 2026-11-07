@@ -1,6 +1,7 @@
 """Bounded downloads; headers are sent only for committed, unexpired results."""
 
 from collections.abc import AsyncIterator
+from typing import Literal
 from uuid import UUID
 
 import anyio
@@ -33,7 +34,11 @@ class DownloadResponse(StreamingResponse):
             self.object_body.close()
 
 
-async def download(report_id: UUID, request: Request) -> DownloadResponse:
+async def download(
+    report_id: UUID,
+    request: Request,
+    disposition: Literal["attachment", "inline"] = "attachment",
+) -> DownloadResponse:
     db: Database = request.app.state.database
 
     def lookup() -> dict[str, object]:
@@ -56,6 +61,22 @@ async def download(report_id: UUID, request: Request) -> DownloadResponse:
         return row
 
     row = await run_in_threadpool(lookup)
+    if disposition == "inline" and row["output_kind"] != "html":
+        raise APIError(
+            422,
+            "inline_preview_unsupported",
+            "Inline preview is available for HTML only",
+        )
+    policy = (
+        "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; "
+        "font-src data:; script-src 'unsafe-inline'"
+    )
+    if disposition == "inline":
+        policy = (
+            "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; "
+            "style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; "
+            "base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
+        )
     body = await run_in_threadpool(request.app.state.storage.get, row["result_key"])
     try:
         # Recheck after object open, before headers; collection allows a full download grace.
@@ -66,12 +87,12 @@ async def download(report_id: UUID, request: Request) -> DownloadResponse:
             request.app.state.settings.download_timeout,
             media_type="application/pdf" if output == "pdf" else "text/html",
             headers={
-                "Content-Disposition": f'attachment; filename="report-{report_id}.{output}"',
+                "Content-Disposition": f'{disposition}; filename="report-{report_id}.{output}"',
                 "Content-Length": str(row["result_size"]),
                 "ETag": '"' + str(row["result_hash"]) + '"',
                 "Cache-Control": "no-store",
                 "X-Content-Type-Options": "nosniff",
-                "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src 'unsafe-inline'",
+                "Content-Security-Policy": policy,
             },
         )
     except BaseException:

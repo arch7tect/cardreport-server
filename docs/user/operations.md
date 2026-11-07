@@ -189,7 +189,7 @@ not throughput guarantees. Measure your own report shape and concurrency.
    exact revision gate intentionally rejects a newer schema. Otherwise keep admission
    paused and forward-fix; any offline backup restoration requires explicit approval.
 
-This unreleased development database moved through revisions 0001–0005. Revision
+This unreleased development database moved through revisions 0001–0006. Revision
 0003 repairs only initial synthetic-fixture digests after changing JSONB to JSON;
 there was no published user-data migration. Do not reuse this repair pattern to
 rewrite immutable production template versions silently.
@@ -219,3 +219,12 @@ The previous image expects `0004` and cannot be used as a live rollback after th
 migration. Use a forward fix; do not downgrade or rewrite applied migrations.
 The image installs Pango/Harfbuzz following the
 [WeasyPrint Debian installation guide](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#debian-11).
+
+## Report-history schema update
+
+The web-console history addition introduces an index-only migration and a new
+expected schema revision. Use the coordinated upgrade procedure above: pause
+admission/template mutations, drain work and stop old workers, migrate explicitly,
+then start matching images. Existing jobs/templates remain intact. Older images
+can reject the new revision even though only indexes changed; do not assume an
+automatic rollback or run a destructive downgrade.
