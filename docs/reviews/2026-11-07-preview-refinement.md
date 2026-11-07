@@ -56,3 +56,18 @@ The full integration/container/browser run used a fresh isolated Compose stack
 and removed only its own resources on success. The normal local API was updated
 and visually checked without changing stored templates or reports. No schema
 migration, package release or production deployment was needed.
+
+
+## Follow-up: close preview and open HTML separately
+
+Owner requested a close action and HTML opening in a separate tab. Preview HTML
+now toggles to Hide preview, removing the iframe and observer on close; reopening
+starts at Fit width. Open HTML uses the existing inline endpoint with
+noopener/noreferrer and the unchanged response CSP sandbox. No API policy change.
+
+A bounded Claude consultation exited 0 with no blockers. Documentation wording
+was tightened around retained-result availability. All 33 browser cases passed,
+including real Chromium/WeasyPrint HTML chart rendering in a new tab, no opener,
+opaque origin, denied localStorage and close/reopen without losing fit behavior.
+Existing native PDF tests also passed. Ruff/format, documentation and whitespace
+checks passed. The screenshot uses the isolated synthetic example.

@@ -95,6 +95,37 @@ def test_upload_preview_and_download(
         page, "document.querySelector('iframe').getBoundingClientRect().width > 900"
     )
 
+    hide = page.get_by_role("button", name="Hide preview", exact=True)
+    expect(hide).to_have_attribute("aria-expanded", "true")
+    hide.click()
+    expect(page.locator('iframe[title="Report preview"]')).to_have_count(0)
+    expect(
+        page.get_by_role("button", name="Preview HTML", exact=True)
+    ).to_have_attribute("aria-expanded", "false")
+    open_html = page.get_by_role("link", name="Open HTML", exact=True)
+    expect(open_html).to_have_attribute("target", "_blank")
+    expect(open_html).to_have_attribute("rel", "noopener noreferrer")
+    with page.expect_popup() as opened:
+        open_html.click()
+    popup = opened.value
+    try:
+        expect(popup.locator("svg").first).to_be_visible(timeout=30000)
+        if renderer == "chromium":
+            expect(popup.locator(".barlayer path").first).to_be_visible()
+        assert popup.evaluate("window.opener === null")
+        assert popup.evaluate("window.origin") == "null"
+        assert popup.evaluate("""() => {
+            try { localStorage.getItem('probe'); return false; }
+            catch (error) { return error.name === 'SecurityError'; }
+        }""")
+    finally:
+        popup.close()
+    # Opening a separate tab does not reopen the embedded preview.
+    expect(page.locator('iframe[title="Report preview"]')).to_have_count(0)
+    page.get_by_role("button", name="Preview HTML", exact=True).click()
+    expect(frame.locator("svg").first).to_be_visible(timeout=30000)
+    expect(page.get_by_label("Preview scale", exact=True)).to_have_value("fit")
+
     with page.expect_download() as download:
         page.get_by_role("link", name="Download HTML", exact=True).click()
     payload = Path(download.value.path()).read_bytes()
@@ -271,6 +302,7 @@ def test_generated_markup_is_text(
             status=503, json={"error": {"message": "Unavailable"}}
         ),
     )
+    page.get_by_role("button", name="Hide preview", exact=True).click()
     page.get_by_role("button", name="Preview HTML").click()
     expect(
         page.get_by_text("Automatic scaling is unavailable.", exact=False)

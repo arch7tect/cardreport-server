@@ -68,8 +68,13 @@ status is always available. Health/readiness and report success are separate che
 Download retrieves the original committed bytes. **Open PDF** opens the same result
 in a new tab using the browser’s native PDF viewer; Download remains a separate
 action. Browser preferences or a missing PDF viewer may cause a download instead.
-If the result expires before the new tab opens, it displays the API error.
-**Preview HTML** opens an isolated frame;
+**Open HTML** opens the report in a separate tab at its original size, without
+opening the embedded preview. It retains the server’s isolated HTML policy.
+**Preview HTML** opens an isolated frame in the console; **Hide preview** closes
+it and releases its resources. You can reopen it while the result is available.
+If a result expires before Open HTML or Open PDF loads, the new tab displays
+the API error.
+
 Chromium and WeasyPrint HTML both work, but only PDF performs the authoritative
 layout/export checks. **Fit width** scales the complete report to the available
 width without rearranging its charts or tables; **100%** uses the original scale
@@ -94,7 +99,7 @@ sessionStorage, and the console does not add authentication or per-user visibili
 | Submit report with data/renderer/output/version | New report |
 | List retained jobs and filter | Reports |
 | Get status/attempts/error/versions | Report detail |
-| Get result content | Download; HTML preview with scaling; Open PDF in a new tab |
+| Get result content | Download; collapsible HTML preview with scaling; Open HTML/PDF in a new tab |
 | Liveness and readiness | Service status |
 | Swagger, OpenAPI, raw metrics | Navigation/footer links |
 

@@ -200,7 +200,10 @@ The console defaults to Fit width: obtain `page_dimensions_mm` from the pinned
 version metadata, computed with CardReport’s public Page API, and scale an iframe
 at that natural width inside a bounded viewport. ResizeObserver follows the
 viewport; 100% restores original size with scrolling. Dispose the observer when
-replacing/hiding the preview or leaving the page. Metadata failure falls back to
+replacing/hiding the preview or leaving the page. Preview HTML toggles to Hide
+preview; closing removes the iframe and reopening starts at Fit width. Open HTML
+uses the same inline endpoint in a new tab with noopener/noreferrer, retaining
+the response CSP sandbox even outside the embedded frame. Metadata failure falls back to
 an unscaled frame. Never access the isolated report DOM or rewrite its content.
 
 PDF has separate Download and Open PDF actions. Open PDF is a direct new-tab link

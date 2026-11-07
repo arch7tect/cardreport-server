@@ -35,20 +35,21 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
   const acceptance = notice();
   if (accepted) history.replaceState(null, '', `#/reports/${encodeURIComponent(id)}`);
   const status = notice(), info = el('div', {class:'panel'}), errorBox = notice();
-  const previewArea = el('section', {class:'panel', hidden:true});
+  const previewArea = el('section', {id:'html-preview', class:'panel', hidden:true});
   const contentUrl = `/v1/reports/${encodeURIComponent(id)}/content`;
   let row = null, busy = false, timer = null, delay = 2000, missing = false, halted = false;
   const refresh = button('Refresh status', () => load(true));
   const download = el('a', {href:contentUrl, class:'button primary', hidden:true}, 'Download');
   const preview = button('Preview HTML', showPreview); preview.hidden = true;
-  const openPdf = el('a', {href:contentUrl + '?disposition=inline', target:'_blank', rel:'noopener noreferrer', class:'button', hidden:true}, 'Open PDF');
+  preview.setAttribute('aria-controls', 'html-preview'); preview.setAttribute('aria-expanded', 'false');
+  const openResult = el('a', {href:contentUrl + '?disposition=inline', target:'_blank', rel:'noopener noreferrer', class:'button', hidden:true}, 'Open PDF');
   const pdfHint = el('p', {class:'muted'}, 'Open PDF uses your browser’s viewer in a new tab. Browser settings may download it instead; an expired result opens an error.'); pdfHint.hidden = true;
   let previewObserver = null, previewRequest = 0;
   const reuse = link('Use these settings', '#/new-report'); reuse.hidden = true;
   const templateLink = link('Open template version', '#/templates'); templateLink.hidden = true;
   const badgeArea = el('div');
   root.replaceChildren(link('← Reports', '#/reports'), heading('Report details', id, badgeArea), acceptance, status,
-    el('div', {class:'toolbar'}, refresh, download, openPdf, preview, button('Copy link', () => copy(location.href, status)), button('Copy ID', () => copy(id, status))),
+    el('div', {class:'toolbar'}, refresh, download, openResult, preview, button('Copy link', () => copy(location.href, status)), button('Copy ID', () => copy(id, status))),
     el('div', {class:'grid'}, el('section', {}, info, errorBox), el('aside', {class:'panel'}, el('h2', {}, 'This run'),
       el('div', {class:'actions'}, templateLink, reuse), el('hr', {class:'divider'}), el('p', {class:'muted'}, 'Accepted means the data and job were stored. The worker validates inputs and generates the result.'),
       pdfHint,
@@ -64,7 +65,8 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
     message(errorBox, row.error ? `${row.error.message} (${row.error.code})${row.error.id ? ` · Reference ${row.error.id}` : ''}` : '', row.error ? 'error' : '', user);
     download.hidden = row.state !== 'succeeded'; preview.hidden = row.state !== 'succeeded' || row.output !== 'html';
     download.textContent = `Download ${row.output.toUpperCase()}`;
-    openPdf.hidden = row.state !== 'succeeded' || row.output !== 'pdf';
+    openResult.hidden = row.state !== 'succeeded';
+    openResult.textContent = `Open ${row.output.toUpperCase()}`;
     pdfHint.hidden = row.output !== 'pdf';
     templateLink.hidden = false; templateLink.href = `#/templates/${encodeURIComponent(row.template_id)}?version=${row.template_version}`;
     reuse.hidden = false; reuse.href = `#/new-report?${new URLSearchParams({template:row.template_id,version:row.template_version,renderer:row.renderer,output:row.output})}`;
@@ -86,7 +88,7 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
       halted = error instanceof APIError && error.status >= 400 && error.status < 500 && error.status !== 429;
       delay = Math.max(Math.min(delay * 2, 30000), (error.retryAfter || 0) * 1000);
       message(status, missing ? 'This report does not exist or its metadata has expired.' : `Status is stale. ${error.message || 'Connection failed.'} Refresh to try again.`, 'error', user);
-      download.hidden = true; preview.hidden = true; openPdf.hidden = true;
+      download.hidden = true; preview.hidden = true; openResult.hidden = true;
       clearPreview();
       return false;
     } finally { busy = false; refresh.disabled = false; schedule(); }
@@ -99,8 +101,10 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
   function clearPreview() {
     ++previewRequest; previewObserver?.disconnect(); previewObserver = null;
     previewArea.replaceChildren(); previewArea.hidden = true;
+    preview.textContent = 'Preview HTML'; preview.setAttribute('aria-expanded', 'false');
   }
   async function showPreview() {
+    if (!previewArea.hidden) { clearPreview(); return; }
     if (!await load(true) || row.state !== 'succeeded' || row.output !== 'html') return;
     clearPreview(); const request = previewRequest; preview.disabled = true;
     try {
@@ -116,6 +120,7 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
       const canvas = el('div', {class:'preview-canvas'}, frame);
       const viewport = el('div', {class:'preview-viewport'}, canvas);
       previewArea.hidden = false;
+      preview.textContent = 'Hide preview'; preview.setAttribute('aria-expanded', 'true');
       previewArea.replaceChildren(el('h2', {}, 'HTML preview'),
         el('p', {class:'muted'}, 'Scale changes the view, not the report layout. HTML may differ from checked PDF output. If an expiry error appears here, refresh the report status.'),
         el('div', {class:'toolbar'}, field('Preview scale', scale)),
