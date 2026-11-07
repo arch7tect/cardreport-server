@@ -54,9 +54,8 @@ kubectl --kubeconfig local/kind-kubeconfig --context kind-cardreport-test -n car
 ```
 
 In another terminal run the Python quickstart with `--url http://127.0.0.1:18080`.
-Stop port-forward with Ctrl-C. Only remove
-a test cluster you created; keep failure evidence first. Do not reset developer
-Compose volumes as part of Kubernetes acceptance.
+Stop port-forward with Ctrl-C. After completing acceptance, follow
+[test cluster cleanup](kubernetes.md#test-cluster-cleanup).
 
 CPU HPA requires Metrics Server. The acceptance environment pins
 [Metrics Server 0.8.1](https://github.com/kubernetes-sigs/metrics-server/releases/tag/v0.8.1).
@@ -108,3 +107,53 @@ Nginx disables both request and response buffering, uses upstream HTTP/1.1 and
 bounded timeouts. The kind proxy is an acceptance fixture, not a public ingress.
 For repeat migrations, confirm/save the completed Job's logs, delete that exact
 completed Job, then reapply migrate.yaml and wait for completion before deployments.
+
+
+## Test cluster cleanup
+
+The acceptance scripts leave the cluster running for inspection; they do not
+clean it up automatically. After testing, delete the dedicated `cardreport-test`
+cluster created above. Run these commands from the project root, using the same
+container runtime that created the cluster.
+
+1. Stop any API/proxy `kubectl port-forward` processes with Ctrl-C. Confirm the
+   intended cluster name:
+
+   ```sh
+   kind get clusters
+   ```
+
+2. Save any reports or other test data you need before deletion. Export diagnostic
+   logs to a new directory and check that the export succeeds:
+
+   ```sh
+   mkdir -p local
+   kind export logs --name cardreport-test "$(mktemp -d local/kind-logs.XXXXXX)"
+   ```
+
+   Logs are not a backup of PostgreSQL or S3 data. Keep the exported logs and
+   existing evidence such as `local/hpa-evidence.json` when investigating failures.
+
+3. Delete only this disposable test cluster:
+
+   ```sh
+   kind delete cluster --name cardreport-test --kubeconfig local/kind-kubeconfig
+   ```
+
+   This removes its node containers and all in-cluster resources, including
+   Metrics Server, the test PostgreSQL/S3 instances and their `emptyDir` data.
+   It also removes this cluster's entries from the specified kubeconfig.
+   Other kind clusters, the separate Compose stack, host Docker images and saved
+   files in `local/` are not removed. Do not use Docker-wide pruning or delete
+   Compose volumes as part of this cleanup.
+
+4. Verify that `cardreport-test` no longer appears:
+
+   ```sh
+   kind get clusters
+   ```
+
+To run acceptance again, repeat the cluster creation, dependency deployment and
+migration steps above. Deleting only the `cardreport` namespace would leave
+cluster-wide additions such as Metrics Server behind, so it is not a complete
+reset of this disposable environment.
