@@ -4,6 +4,8 @@ Status: reviewed implementation proposal; Claude initial and focused reviews com
 Date: 2026-11-06. Owner: Oleg Orlov.
 Scope: a separate project alongside CardReport, not a library refactor.
 
+For the current implementation, see [architecture and worker lifecycle](architecture.md).
+
 ## 1. Purpose and boundaries
 
 Offer an internal HTTP service for reusable templates and asynchronous report

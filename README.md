@@ -80,6 +80,7 @@ code execution, SQL connector, URL data fetcher, broker, or separate scheduler.
 
 ## Project documents
 
+[Implemented architecture and worker lifecycle](docs/architecture.md) ·
 [Design](docs/design.md) · [Implementation plan](docs/implementation-plan.md) ·
 [Design review](docs/reviews/2026-11-06-design.md) · [Plan review](docs/reviews/2026-11-06-implementation-plan.md) ·
 [Renderer review and checks](docs/reviews/2026-11-07-renderers.md)

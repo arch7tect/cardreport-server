@@ -25,6 +25,10 @@ is useful for debugging but does not test proxy buffering. The service receives 
 streaming raw body and streams committed downloads; template registration is bounded
 in-memory validation.
 
+See the architecture guide for [high availability](../architecture.md#high-availability)
+and [scaling](../architecture.md#scaling), including which production controls
+are not included in these example manifests.
+
 ## Disposable kind acceptance
 
 Compose remains the everyday development path. kind tests deployment-specific

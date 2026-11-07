@@ -117,6 +117,9 @@ bounds remain implementation or deployment constants, not application settings.
 
 ## Worker scheduling
 
+See [architecture and worker lifecycle](../architecture.md) for the full execution
+path, ownership checks, process boundaries and recovery sequence.
+
 A worker fills its available slots without a polling pause between claims. It
 checks shutdown, leases and time budgets between claims, so filling a large worker
 does not turn into one uninterrupted batch of database calls.
