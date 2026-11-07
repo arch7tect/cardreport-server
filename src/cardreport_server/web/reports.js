@@ -41,13 +41,17 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
   const refresh = button('Refresh status', () => load(true));
   const download = el('a', {href:contentUrl, class:'button primary', hidden:true}, 'Download');
   const preview = button('Preview HTML', showPreview); preview.hidden = true;
+  const openPdf = el('a', {href:contentUrl + '?disposition=inline', target:'_blank', rel:'noopener noreferrer', class:'button', hidden:true}, 'Open PDF');
+  const pdfHint = el('p', {class:'muted'}, 'Open PDF uses your browser’s viewer in a new tab. Browser settings may download it instead; an expired result opens an error.'); pdfHint.hidden = true;
+  let previewObserver = null, previewRequest = 0;
   const reuse = link('Use these settings', '#/new-report'); reuse.hidden = true;
   const templateLink = link('Open template version', '#/templates'); templateLink.hidden = true;
   const badgeArea = el('div');
   root.replaceChildren(link('← Reports', '#/reports'), heading('Report details', id, badgeArea), acceptance, status,
-    el('div', {class:'toolbar'}, refresh, download, preview, button('Copy link', () => copy(location.href, status)), button('Copy ID', () => copy(id, status))),
+    el('div', {class:'toolbar'}, refresh, download, openPdf, preview, button('Copy link', () => copy(location.href, status)), button('Copy ID', () => copy(id, status))),
     el('div', {class:'grid'}, el('section', {}, info, errorBox), el('aside', {class:'panel'}, el('h2', {}, 'This run'),
       el('div', {class:'actions'}, templateLink, reuse), el('hr', {class:'divider'}), el('p', {class:'muted'}, 'Accepted means the data and job were stored. The worker validates inputs and generates the result.'),
+      pdfHint,
       el('p', {class:'muted'}, 'Use these settings starts a new form. You must supply data again. No automatic retry or cancellation is available.'))), previewArea);
   function terminal() { return row && ['succeeded','failed','expired'].includes(row.state); }
   function schedule() {
@@ -60,9 +64,11 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
     message(errorBox, row.error ? `${row.error.message} (${row.error.code})${row.error.id ? ` · Reference ${row.error.id}` : ''}` : '', row.error ? 'error' : '', user);
     download.hidden = row.state !== 'succeeded'; preview.hidden = row.state !== 'succeeded' || row.output !== 'html';
     download.textContent = `Download ${row.output.toUpperCase()}`;
+    openPdf.hidden = row.state !== 'succeeded' || row.output !== 'pdf';
+    pdfHint.hidden = row.output !== 'pdf';
     templateLink.hidden = false; templateLink.href = `#/templates/${encodeURIComponent(row.template_id)}?version=${row.template_version}`;
     reuse.hidden = false; reuse.href = `#/new-report?${new URLSearchParams({template:row.template_id,version:row.template_version,renderer:row.renderer,output:row.output})}`;
-    if (row.state !== 'succeeded') { previewArea.replaceChildren(); previewArea.hidden = true; }
+    if (row.state !== 'succeeded') clearPreview();
   }
   async function load(user = false) {
     if (!ctx.active || busy || document.hidden) return false;
@@ -80,8 +86,8 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
       halted = error instanceof APIError && error.status >= 400 && error.status < 500 && error.status !== 429;
       delay = Math.max(Math.min(delay * 2, 30000), (error.retryAfter || 0) * 1000);
       message(status, missing ? 'This report does not exist or its metadata has expired.' : `Status is stale. ${error.message || 'Connection failed.'} Refresh to try again.`, 'error', user);
-      download.hidden = true; preview.hidden = true;
-      previewArea.replaceChildren(); previewArea.hidden = true;
+      download.hidden = true; preview.hidden = true; openPdf.hidden = true;
+      clearPreview();
       return false;
     } finally { busy = false; refresh.disabled = false; schedule(); }
   }
@@ -90,12 +96,46 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
       const anchor = el('a', {href:contentUrl, download:''}); anchor.click();
     }
   });
+  function clearPreview() {
+    ++previewRequest; previewObserver?.disconnect(); previewObserver = null;
+    previewArea.replaceChildren(); previewArea.hidden = true;
+  }
   async function showPreview() {
     if (!await load(true) || row.state !== 'succeeded' || row.output !== 'html') return;
-    previewArea.hidden = false;
-    previewArea.replaceChildren(el('h2', {}, 'HTML preview'), el('p', {class:'muted'}, 'HTML may differ from checked PDF output. If an expiry error appears here, refresh the report status.'),
-      el('iframe', {class:'preview', title:'Report preview', sandbox:'allow-scripts', src:contentUrl + '?disposition=inline'}));
+    clearPreview(); const request = previewRequest; preview.disabled = true;
+    try {
+      let dimensions = null;
+      try { dimensions = (await api(`/v1/templates/${encodeURIComponent(row.template_id)}/versions/${row.template_version}`, {}, ctx.controller.signal)).page_dimensions_mm; }
+      catch { /* The original-size preview still works if metadata is unavailable. */ }
+      if (!ctx.active || request !== previewRequest) return;
+      // Render at the report's page width, leaving room for its vertical scrollbar.
+      const width = dimensions ? Math.ceil(dimensions[0] * 96 / 25.4) + 24 : null;
+      const scale = select(width ? [['fit', 'Fit width'], ['1', '100%']] : [['1', '100%']], width ? 'fit' : '1');
+      scale.disabled = !width;
+      const frame = el('iframe', {class:'preview-frame', title:'Report preview', sandbox:'allow-scripts', src:contentUrl + '?disposition=inline'});
+      const canvas = el('div', {class:'preview-canvas'}, frame);
+      const viewport = el('div', {class:'preview-viewport'}, canvas);
+      previewArea.hidden = false;
+      previewArea.replaceChildren(el('h2', {}, 'HTML preview'),
+        el('p', {class:'muted'}, 'Scale changes the view, not the report layout. HTML may differ from checked PDF output. If an expiry error appears here, refresh the report status.'),
+        el('div', {class:'toolbar'}, field('Preview scale', scale)),
+        width ? '' : el('p', {class:'muted'}, 'Automatic scaling is unavailable. Showing the original layout with scrolling.'), viewport);
+      function resize() {
+        const naturalWidth = width || viewport.clientWidth;
+        const factor = scale.value === 'fit' ? Math.min(1, viewport.clientWidth / naturalWidth) : 1;
+        if (!factor) return;
+        viewport.style.overflow = scale.value === 'fit' ? 'hidden' : 'auto';
+        canvas.style.width = `${naturalWidth * factor}px`; canvas.style.height = `${viewport.clientHeight}px`;
+        frame.style.width = `${naturalWidth}px`; frame.style.height = `${viewport.clientHeight / factor}px`;
+        frame.style.transform = `scale(${factor})`;
+      }
+      scale.addEventListener('change', resize);
+      previewObserver = new ResizeObserver(resize); previewObserver.observe(viewport); resize();
+    } catch (error) {
+      if (ctx.active && request === previewRequest) message(status, `Preview could not be opened. ${error.message}`, 'error');
+    } finally { preview.disabled = false; }
   }
+  ctx.cleanup.push(clearPreview);
   const visibility = () => { clearTimeout(timer); if (!document.hidden) load(); };
   document.addEventListener('visibilitychange', visibility);
   ctx.cleanup.push(() => { clearTimeout(timer); document.removeEventListener('visibilitychange', visibility); });

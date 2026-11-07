@@ -55,18 +55,19 @@ def test_inline_contract(
         assert attachment.headers["content-disposition"].startswith("attachment;")
         assert attachment.headers["content-security-policy"].startswith("sandbox;")
         inline = client.get(url + "?disposition=inline")
+        assert inline.status_code == 200 and inline.content == attachment.content
+        assert inline.headers["etag"] == attachment.headers["etag"]
+        assert inline.headers["content-disposition"].startswith("inline;")
+        assert inline.headers["cache-control"] == "no-store"
+        assert inline.headers["x-content-type-options"] == "nosniff"
+        assert "accept-ranges" not in inline.headers
+        policy = inline.headers["content-security-policy"]
         if output == "html":
-            assert inline.status_code == 200 and inline.content == attachment.content
-            assert inline.headers["etag"] == attachment.headers["etag"]
-            assert inline.headers["content-disposition"].startswith("inline;")
-            assert inline.headers["cache-control"] == "no-store"
-            assert inline.headers["x-content-type-options"] == "nosniff"
-            policy = inline.headers["content-security-policy"]
             assert "sandbox allow-scripts;" in policy and "connect-src 'none'" in policy
             assert "allow-same-origin" not in policy
         else:
-            assert inline.status_code == 422
-            assert inline.json()["error"]["code"] == "inline_preview_unsupported"
+            assert inline.headers["content-type"] == "application/pdf"
+            assert "sandbox" not in policy and "frame-ancestors 'none'" in policy
         with database.pool.connection() as conn:
             conn.execute(
                 "UPDATE reports SET result_expires_at=clock_timestamp()-interval '1 second' WHERE id=%s",

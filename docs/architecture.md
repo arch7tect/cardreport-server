@@ -192,7 +192,10 @@ HTML content can be streamed inline using the same expiry and download checks.
 The console uses a sandboxed iframe; the response CSP allows embedded chart scripts
 while blocking parent-origin access and resource fetches. Self-navigation remains
 possible, so this is not a sandbox for arbitrary hostile HTML. Inputs remain
-validated templates/data rendered by CardReport. PDF remains download-only.
+validated templates/data rendered by CardReport. The console scales the iframe
+to the pinned template’s page width, keeping stored content unchanged. PDF can
+open in a separate tab using the browser’s native viewer; it is not embedded in
+the console and has a separate inline response policy.
 See the [console guide](user/web-console.md) and [API](user/api.md) for usage.
 
 ## Before a worker sees a job

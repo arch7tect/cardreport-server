@@ -21,6 +21,8 @@ IDs match `[a-z0-9][a-z0-9_-]{0,63}`. The POST body is an existing
 `cardreport.template/1` envelope, with `Content-Type: application/json` or
 `application/yaml`; UTF-8 only. Limit: 1 MiB. YAML comments/style are not stored.
 The response includes the version, SHA-256 digest, library version and creation time.
+Getting one version also returns `page_dimensions_mm: [width, height]`, derived
+through CardReport’s public Page API, without changing the stored definition/digest.
 The digest covers CardReport's compact JSON serialization, including mapping order;
 semantically equivalent templates with reordered keys can have different digests.
 
@@ -85,13 +87,15 @@ Upload concurrency/backlog limits return 429 and Retry-After; upload idle/total
 deadlines return 408. Temporary dependency failures return 503. See
 [operations](operations.md) for limits, terminal error codes, retries and retention.
 
-## Inline HTML preview
+## Inline result viewing
 
-`GET /v1/reports/{uuid}/content?disposition=inline` streams the same committed HTML
-with an inline filename and an isolated script-enabled CSP. Omit disposition (or
+`GET /v1/reports/{uuid}/content?disposition=inline` streams the same committed
+HTML or PDF with an inline filename. Omit disposition (or
 use `attachment`) for the existing download behavior. Unknown values return 422.
-For an available PDF, inline returns 422 `inline_preview_unsupported`; unavailable
-results still return the existing 404/410/409 first. PDF is download-only.
+Unavailable results still return the existing 404/410/409. PDF uses exact
+`application/pdf`, nosniff and a CSP with `frame-ancestors 'none'`, without the
+HTML sandbox that would block native PDF viewers. Open it as a top-level tab;
+browser preferences may still select download. No range support is advertised.
 
 Both modes keep size/hash headers, no-store, expiry rechecks and bounded streaming.
 HTML preview permits the embedded Plotly scripts but denies same-origin access,

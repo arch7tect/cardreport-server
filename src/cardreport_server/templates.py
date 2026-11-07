@@ -5,6 +5,7 @@ from importlib.metadata import version
 from typing import Annotated, Any
 
 import anyio
+from cardreport import Page as ReportPage
 from cardreport import ReportTemplate, TemplateError
 from fastapi import APIRouter, Path, Query, Request
 from psycopg.types.json import Json
@@ -151,7 +152,12 @@ def get_version(
         ).fetchone()
     if row is None:
         raise APIError(404, "template_not_found", "Template version does not exist")
-    return dict(row)
+    return {
+        **row,
+        "page_dimensions_mm": ReportPage(
+            **row["definition"]["report"].get("page", {})
+        ).dimensions(),
+    }
 
 
 class ArchiveChange(BaseModel):

@@ -179,10 +179,8 @@ rollback requires a compatible image or forward fix, not a destructive downgrade
 
 Keep `GET /v1/reports/{id}/content` and its default attachment behavior. Add
 `disposition=attachment|inline`, default attachment; reject other values with 422.
-Inline is supported for HTML only; after the existing 404/410/409 availability
-checks, for an available PDF return a safe 422
-`inline_preview_unsupported` if inline is requested. Normal PDF downloads are
-unchanged. Both modes share the existing ownership-independent result lookup,
+Inline supports HTML and PDF after the existing 404/410/409 availability checks.
+Normal downloads are unchanged. Both modes share the existing ownership-independent result lookup,
 expiry recheck,
 streaming, timeout and body closure. Do not generate a second artifact or buffer
 an entire report in the API/browser just to preview it.
@@ -198,10 +196,23 @@ its inline Plotly scripts; WeasyPrint HTML works without scripts. Verify real
 outputs under this policy before committing to it; do not silently relax network
 or origin isolation to make a chart render. Existing attachment CSP is unchanged.
 
-PDF has a Download action in v1; users can open the downloaded file in their own
-viewer. Do not promise browser-native inline PDF under the existing sandbox CSP,
-add PDF.js, or convert PDF pages to images. A future PDF preview needs its own
-verified browser/header contract.
+The console defaults to Fit width: obtain `page_dimensions_mm` from the pinned
+version metadata, computed with CardReport’s public Page API, and scale an iframe
+at that natural width inside a bounded viewport. ResizeObserver follows the
+viewport; 100% restores original size with scrolling. Dispose the observer when
+replacing/hiding the preview or leaving the page. Metadata failure falls back to
+an unscaled frame. Never access the isolated report DOM or rewrite its content.
+
+PDF has separate Download and Open PDF actions. Open PDF is a direct new-tab link
+with noopener/noreferrer; the browser’s native viewer handles the document. The
+PDF inline response keeps application/pdf, nosniff, no-store and the CSP
+`default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`.
+It omits CSP sandbox, which prevents the native viewer from loading.
+The response still streams the same bytes through the existing expiry/timeout
+checks; no range support is advertised. A retention race can show a safe JSON
+error in the new tab. Browser preferences may choose downloading instead.
+No PDF.js, page rasterization or embedding of PDF in the console is introduced.
+This extends the initial PDF-download-only design at the owner’s request.
 
 Never insert report HTML, template source or error text into the console DOM as
 HTML. Use textContent/form values for text. Sandbox prevents report scripts from

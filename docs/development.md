@@ -87,3 +87,7 @@ an isolated uv environment before checking console/Swagger routes. Browser fixtu
 use real services for the main workflow and intercepted responses for deterministic
 error/polling edges; synthetic HTML probes are test-owned S3 fixtures, not public
 test endpoints.
+
+The native PDF viewer checks need the full Chromium build installed by the command
+above. `--only-shell` is insufficient: those cases use `channel="chromium"`, while
+the remaining UI cases use headless-shell. No extra browser service is needed.

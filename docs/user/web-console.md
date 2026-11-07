@@ -65,11 +65,16 @@ detail is polled. Polling pauses in hidden tabs and stops on navigation or termi
 state; temporary read errors back off and mark the displayed status stale. Refresh
 status is always available. Health/readiness and report success are separate checks.
 
-Download retrieves the original committed bytes. PDF can be opened in your normal
-PDF viewer; there is no built-in PDF preview. Preview HTML opens an isolated frame;
+Download retrieves the original committed bytes. **Open PDF** opens the same result
+in a new tab using the browser’s native PDF viewer; Download remains a separate
+action. Browser preferences or a missing PDF viewer may cause a download instead.
+If the result expires before the new tab opens, it displays the API error.
+**Preview HTML** opens an isolated frame;
 Chromium and WeasyPrint HTML both work, but only PDF performs the authoritative
-layout/export checks. A report has its own fixed layout and may need scrolling
-inside the frame. If retention expires after the status check, the frame may show
+layout/export checks. **Fit width** scales the complete report to the available
+width without rearranging its charts or tables; **100%** uses the original scale
+with scrolling. The fit follows window resizing. If template dimensions cannot be
+loaded, the preview remains available at its original scale. If retention expires after the status check, the frame may show
 a safe JSON error; use Refresh status. The endpoint remains the final authority
 on whether a result is downloadable. Failed/pending results have no partial output.
 
@@ -89,7 +94,7 @@ sessionStorage, and the console does not add authentication or per-user visibili
 | Submit report with data/renderer/output/version | New report |
 | List retained jobs and filter | Reports |
 | Get status/attempts/error/versions | Report detail |
-| Get result content | Download; HTML preview |
+| Get result content | Download; HTML preview with scaling; Open PDF in a new tab |
 | Liveness and readiness | Service status |
 | Swagger, OpenAPI, raw metrics | Navigation/footer links |
 

@@ -134,3 +134,28 @@ def test_offline_docs_and_schema(integration_settings: Settings) -> None:
             },
         )
         assert "access-control-allow-origin" not in preflight.headers
+
+
+@pytest.mark.parametrize(
+    "page,dimensions",
+    [
+        ({}, [210, 297]),
+        ({"size": "A3", "orientation": "landscape"}, [420, 297]),
+        ({"size": [564.444, 423.333]}, [564.444, 423.333]),
+    ],
+)
+def test_template_page_dimensions(
+    integration_settings: Settings,
+    template_spec: dict[str, Any],
+    page: dict[str, Any],
+    dimensions: list[float],
+) -> None:
+    template_spec["report"]["page"] = page
+    slug = "dimensions-" + uuid4().hex
+    with TestClient(create_app(integration_settings)) as client:
+        created = client.post(f"/v1/templates/{slug}/versions", json=template_spec)
+        assert created.status_code == 201
+        stored = client.get(f"/v1/templates/{slug}/versions/1").json()
+        assert stored["page_dimensions_mm"] == dimensions
+        assert stored["definition"] == template_spec
+        assert stored["digest"] == created.json()["digest"]

@@ -1,5 +1,6 @@
 import hashlib
 import os
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -11,6 +12,13 @@ from cardreport_server.db import Database
 
 pytestmark = pytest.mark.ui
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def wait_geometry(page: Page, expression: str) -> None:
+    deadline = time.monotonic() + 3
+    while not page.evaluate(expression):
+        assert time.monotonic() < deadline, expression
+        time.sleep(0.02)
 
 
 def register_example(api_url: str, name: str = "reference") -> str:
@@ -63,10 +71,36 @@ def test_upload_preview_and_download(
     if renderer == "chromium":
         expect(frame.locator(".barlayer path").first).to_be_visible()
     assert page.locator("iframe").get_attribute("sandbox") == "allow-scripts"
+    viewport = page.locator(".preview-viewport")
+    expect(page.get_by_label("Preview scale", exact=True)).to_have_value("fit")
+    assert viewport.evaluate("e => e.scrollWidth <= e.clientWidth + 1")
+    assert page.locator("iframe").evaluate(
+        "e => e.getBoundingClientRect().width <= e.parentElement.parentElement.clientWidth + 1"
+    )
+    page.get_by_label("Preview scale", exact=True).select_option("1")
+    assert viewport.evaluate("e => e.scrollWidth > e.clientWidth")
+    page.get_by_label("Preview scale", exact=True).select_option("fit")
+    page.set_viewport_size({"width": 390, "height": 844})
+    # Observe the adjusted frame geometry, not only an assigned transform string.
+    expect(page.get_by_label("Preview scale", exact=True)).to_have_value("fit")
+    wait_geometry(
+        page,
+        "document.querySelector('.preview-viewport').scrollWidth <= document.querySelector('.preview-viewport').clientWidth + 1",
+    )
+    assert frame.locator(".page").first.evaluate(
+        "e => e.getBoundingClientRect().width <= innerWidth"
+    )
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    wait_geometry(
+        page, "document.querySelector('iframe').getBoundingClientRect().width > 900"
+    )
+
     with page.expect_download() as download:
         page.get_by_role("link", name="Download HTML", exact=True).click()
     payload = Path(download.value.path()).read_bytes()
     assert b"<html" in payload
+    # Bring the isolated frame into view so Chromium paints it in full-page captures.
+    page.locator(".preview-viewport").scroll_into_view_if_needed()
     # Capture the actual console before teardown for documentation; only bundled data.
     page.screenshot(
         path=str(
@@ -174,7 +208,10 @@ def test_shared_history(browser: Browser, api_url: str) -> None:
         context.close()
 
 
-def test_generated_markup_is_text(page: Page, api_url: str) -> None:
+@pytest.mark.parametrize("size,orientation", [("A4", "portrait"), ("A3", "landscape")])
+def test_generated_markup_is_text(
+    page: Page, api_url: str, size: str, orientation: str
+) -> None:
     import json
 
     slug = "ui-text-" + uuid4().hex
@@ -186,6 +223,7 @@ def test_generated_markup_is_text(page: Page, api_url: str) -> None:
         },
         "report": {
             "title": marker,
+            "page": {"size": size, "orientation": orientation},
             "blocks": [
                 {
                     "type": "card",
@@ -221,3 +259,73 @@ def test_generated_markup_is_text(page: Page, api_url: str) -> None:
     expect(frame.get_by_text(marker, exact=True).first).to_be_visible()
     expect(frame.locator("img")).to_have_count(0)
     assert page.evaluate("window.escaped") is None
+    page.set_viewport_size({"width": 390, "height": 844})
+    wait_geometry(
+        page,
+        "document.querySelector('.preview-viewport').scrollWidth <= document.querySelector('.preview-viewport').clientWidth + 1",
+    )
+
+    page.route(
+        f"**/v1/templates/{slug}/versions/1",
+        lambda route: route.fulfill(
+            status=503, json={"error": {"message": "Unavailable"}}
+        ),
+    )
+    page.get_by_role("button", name="Preview HTML").click()
+    expect(
+        page.get_by_text("Automatic scaling is unavailable.", exact=False)
+    ).to_be_visible()
+    expect(page.get_by_label("Preview scale", exact=True)).to_be_disabled()
+    expect(frame.get_by_text(marker, exact=True).first).to_be_visible()
+
+
+@pytest.mark.parametrize("renderer", ["chromium", "weasyprint"])
+def test_native_pdf_new_tab(browser: Browser, api_url: str, renderer: str) -> None:
+    # Full Chromium's new headless mode includes its native PDF viewer; headless-shell does not.
+    full = browser.browser_type.launch(channel="chromium")
+    context = full.new_context(base_url=api_url)
+    context.tracing.start(screenshots=True, snapshots=True)
+    downloads: list[str] = []
+    main = context.new_page()
+    main.on("download", lambda download: downloads.append(download.suggested_filename))
+    try:
+        slug = register_example(api_url)
+        main.goto(f"/ui/#/new-report?template={slug}")
+        main.get_by_label("Renderer", exact=True).select_option(renderer)
+        main.get_by_label("Dataset file", exact=True).set_input_files(
+            ROOT / "examples/reference_data.json"
+        )
+        main.get_by_role("button", name="Generate report", exact=True).click()
+        expect(main.locator(".badge.succeeded")).to_be_visible(timeout=180000)
+        link = main.get_by_role("link", name="Open PDF", exact=True)
+        expect(link).to_have_attribute("target", "_blank")
+        expect(link).to_have_attribute("rel", "noopener noreferrer")
+        with context.expect_page() as opened:
+            link.click()
+        pdf = opened.value
+        pdf.on(
+            "download", lambda download: downloads.append(download.suggested_filename)
+        )
+        deadline = time.monotonic() + 15
+        while True:
+            viewer = next(
+                (f for f in pdf.frames if f.url.startswith("chrome-extension://")), None
+            )
+            if viewer is not None:
+                break
+            assert time.monotonic() < deadline, "Native PDF viewer did not open"
+            pdf.wait_for_timeout(50)
+        expect(viewer.locator("viewer-page-selector input")).to_have_value("1")
+        assert not downloads
+        assert pdf.evaluate("window.opener === null")
+        artifact = Path(os.environ["CARDREPORT_TEST_ARTIFACTS"])
+        pdf.screenshot(path=str(artifact / f"ui-native-pdf-{renderer}.png"))
+    finally:
+        context.tracing.stop(
+            path=str(
+                Path(os.environ["CARDREPORT_TEST_ARTIFACTS"])
+                / f"ui-native-pdf-{renderer}.zip"
+            )
+        )
+        context.close()
+        full.close()

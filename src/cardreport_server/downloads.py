@@ -61,22 +61,19 @@ async def download(
         return row
 
     row = await run_in_threadpool(lookup)
-    if disposition == "inline" and row["output_kind"] != "html":
-        raise APIError(
-            422,
-            "inline_preview_unsupported",
-            "Inline preview is available for HTML only",
-        )
     policy = (
         "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; "
         "font-src data:; script-src 'unsafe-inline'"
     )
-    if disposition == "inline":
+    if disposition == "inline" and row["output_kind"] == "html":
         policy = (
             "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; "
             "style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; "
             "base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
         )
+    elif disposition == "inline":
+        # Native PDF viewers have their own isolation; CSP sandbox prevents them loading.
+        policy = "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     body = await run_in_threadpool(request.app.state.storage.get, row["result_key"])
     try:
         # Recheck after object open, before headers; collection allows a full download grace.
