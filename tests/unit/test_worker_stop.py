@@ -1,3 +1,4 @@
+import json
 import signal
 import subprocess
 from pathlib import Path
@@ -44,7 +45,9 @@ def test_cancelled_child_launch_wakes_supervisor(
 
     from cardreport_server.worker import Worker
 
-    worker = Worker(settings.model_copy(update={"temp_root": tmp_path}))
+    worker = Worker(
+        settings.model_copy(update={"temp_root": tmp_path, "render_timeout": 450})
+    )
     database = Mock()
     connection = Mock()
     connection.execute.return_value.fetchone.return_value = {"definition": "{}"}
@@ -70,6 +73,9 @@ def test_cancelled_child_launch_wakes_supervisor(
     child.poll.side_effect = lambda: child.returncode
 
     def launch(*args: object, **kwargs: object) -> Mock:
+        options = json.loads(next(tmp_path.glob("attempt-*/options.json")).read_text())
+        assert options["render_timeout"] == 450
+        assert options["render_deadline"] < running.deadline
         running.cancelled.set()
         return child
 

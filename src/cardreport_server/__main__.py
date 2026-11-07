@@ -12,7 +12,14 @@ def main() -> None:
     parser.add_argument(
         "command", choices=["api", "worker", "worker-health", "init-storage", "smoke"]
     )
+    from .settings import Settings
+
     parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument(
+        "--smoke-timeout",
+        type=float,
+        default=Settings.model_fields["startup_render_timeout"].default,
+    )
     args = parser.parse_args()
     try:
         if args.command == "api":
@@ -59,7 +66,9 @@ def main() -> None:
             report = Report("Renderer startup check")
             report.row(Card(KPI("Total", 34)), height_mm=50)
             for renderer in (ChromiumRenderer(), WeasyPrintRenderer()):
-                assert report.to_pdf(timeout=30, renderer=renderer).startswith(b"%PDF-")
+                assert report.to_pdf(
+                    timeout=args.smoke_timeout, renderer=renderer
+                ).startswith(b"%PDF-")
                 print(f"{type(renderer).__name__} PDF smoke passed")
     except ValidationError:
         print(

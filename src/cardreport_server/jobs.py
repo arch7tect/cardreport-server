@@ -252,7 +252,10 @@ def retry(
                         "retryable": attempt.attempt_no < settings.max_attempts,
                     }
                 ),
-                min(settings.retry_delay * 2 ** (attempt.attempt_no - 1), 120),
+                min(
+                    settings.retry_delay * 2 ** (attempt.attempt_no - 1),
+                    settings.retry_max_delay,
+                ),
                 attempt.report_id,
                 attempt.token,
             ),
@@ -265,18 +268,19 @@ def reap(db: Database, settings: Settings) -> int:
         rows = conn.execute(
             """WITH expired AS (
                 SELECT id FROM reports WHERE state='running' AND lease_until<=clock_timestamp()
-                ORDER BY lease_until FOR UPDATE SKIP LOCKED LIMIT 100
+                ORDER BY lease_until FOR UPDATE SKIP LOCKED LIMIT %s
             ) UPDATE reports r SET state=CASE WHEN (attempt_no >= %s OR attempt_deadline<=clock_timestamp()) THEN 'failed' ELSE 'queued' END,
                 terminal_state=CASE WHEN (attempt_no >= %s OR attempt_deadline<=clock_timestamp()) THEN 'failed' END,
                 finished_at=CASE WHEN (attempt_no >= %s OR attempt_deadline<=clock_timestamp()) THEN clock_timestamp() END,
                 input_expires_at=CASE WHEN (attempt_no >= %s OR attempt_deadline<=clock_timestamp()) THEN clock_timestamp()+input_retention*interval '1 second' END,
                 metadata_expires_at=CASE WHEN (attempt_no >= %s OR attempt_deadline<=clock_timestamp()) THEN clock_timestamp()+metadata_retention*interval '1 second' END,
-                lease_until=NULL,next_attempt_at=clock_timestamp()+(LEAST(%s*power(2,attempt_no-1),120)*interval '1 second'),
+                lease_until=NULL,next_attempt_at=clock_timestamp()+(LEAST(%s*power(2,attempt_no-1),%s)*interval '1 second'),
                 error=jsonb_build_object('code',CASE WHEN attempt_deadline<=clock_timestamp() THEN 'render_timeout' ELSE 'worker_lost' END,
                     'stage',CASE WHEN attempt_deadline<=clock_timestamp() THEN 'render' ELSE 'infrastructure' END,
                     'message','Worker ownership expired','retryable', (attempt_no < %s AND attempt_deadline>clock_timestamp()))
             FROM expired e WHERE r.id=e.id RETURNING r.id""",
-            (settings.max_attempts,) * 5
-            + (settings.retry_delay, settings.max_attempts),
+            (settings.maintenance_batch_size,)
+            + (settings.max_attempts,) * 5
+            + (settings.retry_delay, settings.retry_max_delay, settings.max_attempts),
         ).fetchall()
     return len(rows)

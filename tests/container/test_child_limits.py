@@ -13,6 +13,8 @@ pytestmark = pytest.mark.container
 @pytest.mark.parametrize(
     "case,renderer,expected",
     [
+        ("long_budget", "chromium", "ok"),
+        ("long_budget", "weasyprint", "ok"),
         ("expired", "chromium", "render_timeout"),
         ("expired", "weasyprint", "render_timeout"),
         ("size", "chromium", "output_too_large"),
@@ -45,7 +47,11 @@ def test_real_child_limits(
         text=True,
     ).split()[0]
     root = Path(__file__).resolve().parents[2]
-    name = "reference" if case == "size" and renderer == "weasyprint" else "flow"
+    name = (
+        "reference"
+        if case == "long_budget" or (case == "size" and renderer == "weasyprint")
+        else "flow"
+    )
     template = json.loads((root / f"examples/{name}_template.json").read_text())
     data = (root / f"examples/{name}_data.json").read_text()
     if case in {"overflow", "large_table"}:
@@ -81,7 +87,7 @@ with tempfile.TemporaryDirectory() as tmp:
  d=Path(tmp)
  (d/'template.json').write_text(json.dumps(p['template']))
  (d/'input').write_text(p['data'])
- (d/'options.json').write_text(json.dumps({'input_type':'application/json','renderer':p['renderer'],'output':'pdf' if p['case'] in ('overflow','large_table') else 'html','render_deadline':time.monotonic()+(-1 if p['case']=='expired' else 30),'output_limit':1024 if p['case']=='size' else 32000000,'data_limits':{}}))
+ (d/'options.json').write_text(json.dumps({'input_type':'application/json','renderer':p['renderer'],'output':'pdf' if p['case'] in ('overflow','large_table','long_budget') else 'html','render_timeout':450 if p['case']=='long_budget' else 30,'render_deadline':time.monotonic()+(-1 if p['case']=='expired' else 500 if p['case']=='long_budget' else 30),'output_limit':1024 if p['case']=='size' else 32000000,'data_limits':{}}))
  subprocess.run([sys.executable,'-m','cardreport_server.render_child',str(d)],env=child_environment(d),check=True,timeout=40)
  print((d/'outcome.json').read_text())
 """
@@ -93,4 +99,8 @@ with tempfile.TemporaryDirectory() as tmp:
         timeout=45,
         check=True,
     )
-    assert json.loads(completed.stdout)["code"] == expected
+    outcome = json.loads(completed.stdout)
+    if expected == "ok":
+        assert outcome == {"ok": True}
+    else:
+        assert outcome["code"] == expected

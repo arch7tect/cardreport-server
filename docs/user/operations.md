@@ -24,10 +24,13 @@ Other required settings: `S3_ENDPOINT`, `S3_BUCKET`. `S3_PREFIX` defaults to
 | DATA_MAX_ROWS / DATA_MAX_CELLS | 2000 / 100000 | Library dataset limits, may only be lowered |
 | UPLOAD_SLOTS / BACKLOG_LIMIT | 4 / 1000 | Per-API upload cap / soft global backlog cap |
 | UPLOAD_TIMEOUT / UPLOAD_IDLE_TIMEOUT | 120 / 30 | Total and idle upload seconds |
+| RENDER_TIMEOUT | 300 | PDF rendering cap, further reduced to the remaining attempt budget |
+| STARTUP_RENDER_TIMEOUT / STARTUP_TIMEOUT | 30 / 75 | Per-renderer PDF smoke and total startup smoke seconds |
+| HEALTH_MAX_AGE | 60 | Maximum age of the worker loop progress file, in seconds |
 | ATTEMPT_TIMEOUT / CLEANUP_GRACE | 120 / 5 | Whole attempt and child unwind seconds |
 | SHUTDOWN_GRACE | 130 | Drain budget; container termination grace must exceed this |
 | LEASE_SECONDS / HEARTBEAT_SECONDS | 60 / 15 | Ownership lease and renewal interval |
-| MAX_ATTEMPTS / RETRY_DELAY | 3 / 5 | Infrastructure retry cap and initial backoff |
+| MAX_ATTEMPTS / RETRY_DELAY / RETRY_MAX_DELAY | 3 / 5 / 120 | Total infrastructure attempts, initial delay and maximum delay in seconds |
 | QUEUE_MAX_AGE | 3600 | Seconds since initial admission, not last retry |
 | INPUT_RETENTION / RESULT_RETENTION | 3600 / 86400 | Seconds after completion |
 | METADATA_RETENTION | 604800 | Seconds after completion |
@@ -35,12 +38,82 @@ Other required settings: `S3_ENDPOINT`, `S3_BUCKET`. `S3_PREFIX` defaults to
 | ORPHAN_GRACE | 900 | Minimum age before collecting unreferenced objects |
 | MAINTENANCE_INTERVAL | 30 | Per-worker cleanup/reaper interval |
 | ADMISSION_ENABLED | true | Pause new reports and template mutations |
+| MAINTENANCE_BATCH_SIZE | 100 | Rows per bounded cleanup/reaper query and objects per orphan page |
+| IO_TIMEOUT | 5 | S3 connect/read and database pool acquisition seconds |
+| DB_POOL_SIZE | 8 | Maximum connections per service process |
+| DB_CONNECT_TIMEOUT / DB_STATEMENT_TIMEOUT / DB_LOCK_TIMEOUT | 5 / 5 / 3 | Database connection, statement and lock wait seconds |
+| S3_REGION / S3_PREFIX | us-east-1 / cardreport/ | Object-store region and installation-exclusive key prefix |
+| TEMP_ROOT | /tmp/cardreport-worker | Dedicated per-container attempt directory |
 | IMAGE_ID | development | Operator-provided immutable image identity in status |
 
 See `Settings` for all bounds. The attempt budget must include I/O, cleanup and at
 least one render second; lease exceeds three heartbeats. Data/schema objects are
 still materialized in the child; streaming upload is not constant-memory rendering.
 Backlog admission is deliberately soft: concurrent in-flight uploads can overshoot.
+
+## Applying configuration
+
+All application settings in `Settings` are wired into the Compose app services.
+Copy [`.env.example`](../../.env.example) to `.env` and edit the `CARDREPORT_`
+values, or export them in the shell (shell values take precedence). For example:
+
+```ini
+CARDREPORT_MAX_ATTEMPTS=4
+CARDREPORT_RETRY_DELAY=5
+CARDREPORT_RETRY_MAX_DELAY=60
+CARDREPORT_POLL_SECONDS=0.25
+CARDREPORT_WORKER_CONCURRENCY=4
+CARDREPORT_RENDER_TIMEOUT=450
+CARDREPORT_ATTEMPT_TIMEOUT=500
+CARDREPORT_SHUTDOWN_GRACE=510
+CONTAINER_STOP_GRACE=520s
+```
+
+Apply with `docker compose --profile app up -d --force-recreate api worker` after
+draining existing work as described below. A process reads settings at startup;
+`docker compose restart` does not apply changed container environment variables.
+The old Compose `WORKER_CONCURRENCY` variable remains a fallback; the prefixed
+name takes precedence. In Kubernetes, put the same application keys into
+`cardreport-config`, then roll out API and worker Deployments after draining.
+Set `terminationGracePeriodSeconds` above `SHUTDOWN_GRACE`.
+
+The local Compose stack intentionally keeps its bundled database/S3 endpoints and
+local credentials. `.env.example`'s `CARDREPORT_DATABASE_URL`, `S3_ENDPOINT`,
+`S3_ACCESS_KEY` and `S3_SECRET_KEY` are for native API debugging; Compose does not
+forward those four values into containers. Container connections use service DNS,
+not host loopback. Customize the manifest itself for external dependencies.
+All other settings use the same prefixed names in native runs and Compose.
+
+CardReport is declared as `>=0.8.2,<0.9`; `uv.lock` fixes the tested exact version.
+Dependency updates are explicit and require both-engine verification; images use
+`uv sync --locked`, and workers never update packages at startup.
+
+PDF uses `min(RENDER_TIMEOUT, remaining attempt budget)` with no hidden five-minute
+clamp. The attempt budget includes input preparation, rendering, upload, DB commit
+and cleanup. The `4 * IO_TIMEOUT` post-render reserve is headroom for two S3 SDK
+attempts, not a guaranteed total I/O deadline. The supervisor remains the backstop.
+HTML does not accept a renderer timeout in the library's public API: WeasyPrint
+HTML retains its internal 30-second deadline; both HTML paths remain subject to
+supervisor cancellation at the attempt deadline.
+
+Validation rejects non-finite timers and inconsistent budgets: lease must exceed
+three heartbeat intervals, startup smoke must allow more than two per-engine
+budgets, health age must exceed the poll interval, initial retry delay must not
+exceed its cap, and lock timeout must not exceed statement timeout. Existing input
+and attempt safety bounds remain visible in `Settings`; these are not extra hidden
+execution deadlines. There are three total attempts by default, not three retries.
+
+A shorter shutdown budget than the attempt budget is allowed: draining can stop
+unfinished attempts, which then recover through lease expiry and consume another
+attempt. Set health age high enough for the configured synchronous DB operations
+(pool acquisition plus statement time, potentially twice per loop); polling alone
+does not bound the duration of these operations.
+
+Compose-only `CONTAINER_STOP_GRACE` defaults to `140s`; `WORKER_START_PERIOD`
+defaults to `30s`. Increase the latter when extending startup smoke timeouts so
+health probes allow startup to finish (also adjust Kubernetes startup probes).
+S3 SDK retry count (two), transfer chunk sizes, ports, exit codes and schema/API
+bounds remain implementation or deployment constants, not application settings.
 
 ## Worker scheduling
 
@@ -125,7 +198,7 @@ rewrite immutable production template versions silently.
 | invalid_data | Correct dataset shape, types, bindings or limits |
 | layout_overflow | Widen/resize the chart or use a suitable flow layout |
 | unsupported_feature | Change the unsupported template feature |
-| render_timeout | Reduce report complexity or raise the bounded attempt budget |
+| render_timeout | Reduce report complexity or raise the PDF render cap and whole-attempt budget |
 | output_too_large | Reduce content or adjust the server output cap |
 | input_integrity | Stored bytes differ from admission metadata; investigate storage |
 | render_failed / internal_error | Terminal unexpected failure; correlate the safe `id` with logs |

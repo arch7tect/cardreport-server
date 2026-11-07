@@ -20,8 +20,11 @@ class Database:
             timeout=settings.io_timeout,
             kwargs={
                 "row_factory": dict_row,
-                "connect_timeout": 5,
-                "options": "-c statement_timeout=5000 -c lock_timeout=3000",
+                "connect_timeout": settings.db_connect_timeout,
+                "options": (
+                    f"-c statement_timeout={max(1, int(settings.db_statement_timeout * 1000))} "
+                    f"-c lock_timeout={max(1, int(settings.db_lock_timeout * 1000))}"
+                ),
             },
             open=False,
         )

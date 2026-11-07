@@ -198,3 +198,63 @@ def test_infrastructure_retry_backoff_cap_and_stale_token(
             else:
                 assert row["state"] == "failed"
         old = attempt
+
+
+@pytest.mark.parametrize("reaper", [False, True])
+def test_configured_retry_delay_cap(
+    database: Database,
+    integration_settings: Settings,
+    template_spec: dict[str, object],
+    reaper: bool,
+) -> None:
+    config = integration_settings.model_copy(
+        update={"retry_delay": 2, "retry_max_delay": 3}
+    )
+    identifier = queued(database, config, template_spec)
+    with database.pool.connection() as conn:
+        conn.execute("UPDATE reports SET attempt_no=1 WHERE id=%s", (identifier,))
+    attempt = jobs.claim(database, config)
+    assert attempt is not None and attempt.attempt_no == 2
+    if reaper:
+        with database.pool.connection() as conn:
+            conn.execute(
+                "UPDATE reports SET lease_until=clock_timestamp()-interval '1 second' WHERE id=%s",
+                (identifier,),
+            )
+        assert jobs.reap(database, config) >= 1
+    else:
+        assert jobs.retry(database, config, attempt)
+    with database.pool.connection() as conn:
+        row = conn.execute(
+            "SELECT state,extract(epoch FROM next_attempt_at-clock_timestamp()) AS delay FROM reports WHERE id=%s",
+            (identifier,),
+        ).fetchone()
+    assert row is not None and row["state"] == "queued"
+    assert 2 < row["delay"] <= 3
+
+
+def test_reaper_batch_size(
+    database: Database,
+    integration_settings: Settings,
+    template_spec: dict[str, object],
+) -> None:
+    attempts = []
+    for _ in range(2):
+        queued(database, integration_settings, template_spec)
+        attempt = jobs.claim(database, integration_settings)
+        assert attempt is not None
+        attempts.append(attempt)
+    with database.pool.connection() as conn:
+        conn.execute(
+            "UPDATE reports SET lease_until=clock_timestamp()-interval '1 day' WHERE id=ANY(%s)",
+            ([a.report_id for a in attempts],),
+        )
+    config = integration_settings.model_copy(update={"maintenance_batch_size": 1})
+    assert jobs.reap(database, config) == 1
+    with database.pool.connection() as conn:
+        row = conn.execute(
+            "SELECT count(*) AS n FROM reports WHERE id=ANY(%s) AND state='running'",
+            ([a.report_id for a in attempts],),
+        ).fetchone()
+    assert row is not None and row["n"] == 1
+    jobs.reap(database, integration_settings)

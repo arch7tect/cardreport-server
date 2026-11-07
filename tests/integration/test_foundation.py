@@ -119,3 +119,26 @@ def test_renderer_migration_preserves_existing_jobs(
         conn.execute("INSERT INTO reports(id,renderer) VALUES(2,'weasyprint')")
         with pytest.raises(CheckViolation), conn.transaction():
             conn.execute("INSERT INTO reports(id,renderer) VALUES(3,'unknown')")
+
+
+def test_configured_database_timeouts(integration_settings: Settings) -> None:
+    from psycopg.errors import QueryCanceled
+
+    config = integration_settings.model_copy(
+        update={
+            "db_connect_timeout": 4,
+            "db_statement_timeout": 0.1,
+            "db_lock_timeout": 0.05,
+        }
+    )
+    db = Database(config)
+    db.open()
+    try:
+        with db.pool.connection() as conn:
+            row = conn.execute("SHOW lock_timeout").fetchone()
+            assert row is not None and row["lock_timeout"] == "50ms"
+        with pytest.raises(QueryCanceled):
+            with db.pool.connection() as conn:
+                conn.execute("SELECT pg_sleep(1)")
+    finally:
+        db.close()

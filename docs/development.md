@@ -59,3 +59,8 @@ Kubernetes acceptance is separate: follow [the kind recipe](user/kubernetes.md).
 `scripts/test_hpa.py --context kind-cardreport-test --kubeconfig local/kind-kubeconfig`
 submits at most 60 synthetic reports and verifies real HPA scaling, not just schema
 validity. It requires the port-forward from that recipe and Metrics Server.
+
+[Worker configuration and timeout review](reviews/2026-11-07-configuration.md).
+
+Unit checks require the Docker Compose CLI for configuration interpolation; no
+Docker daemon or running service is needed for that check.

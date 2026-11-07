@@ -33,8 +33,16 @@ def main() -> None:
     folder = ROOT / "local" / project
     folder.mkdir(parents=True)
     pg_port, s3_port = port(), port()
-    env = {k: v for k, v in os.environ.items() if not k.startswith("CARDREPORT_")} | {
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith("CARDREPORT_")
+        and k
+        not in {"WORKER_CONCURRENCY", "CONTAINER_STOP_GRACE", "WORKER_START_PERIOD"}
+    } | {
         "COMPOSE_PROJECT_NAME": project,
+        "COMPOSE_ENV_FILES": "/dev/null",
+        "COMPOSE_DISABLE_ENV_FILE": "1",
         "POSTGRES_DB": "cardreport_test",
         "POSTGRES_PORT": pg_port,
         "S3_PORT": s3_port,

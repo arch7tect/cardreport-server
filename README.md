@@ -25,12 +25,16 @@ Install Docker with Compose and [uv](https://docs.astral.sh/uv/), then:
 
 ```sh
 uv sync --locked
+cp .env.example .env  # First setup only; preserve any existing .env.
 docker compose --profile app build
 docker compose up -d --wait postgres s3
 docker compose --profile app run --rm migrate
 docker compose --profile app up -d --wait api worker
 uv run python examples/client.py
 ```
+
+Configure worker slots, retries and timeouts in `.env`; see
+[configuration and budgets](docs/user/operations.md#configuration-and-budgets).
 
 The example saves `output/reference.pdf`. Open [local Swagger](http://127.0.0.1:18000/docs)
 for the API. Everything needed for rendering and Swagger is in the app image;

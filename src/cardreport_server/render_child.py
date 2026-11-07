@@ -42,6 +42,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, cancel)
     directory = Path(sys.argv[1])
     outcome: dict[str, object]
+    stage = "bind"
     try:
         options = json.loads((directory / "options.json").read_text())
         template = ReportTemplate.from_json((directory / "template.json").read_bytes())
@@ -53,7 +54,10 @@ def main() -> None:
             else datasets_from_yaml(raw, limits=limits)
         )
         report = template.bind(datasets)
-        remaining = min(options["render_deadline"] - time.monotonic(), 300)
+        stage = "render"
+        remaining = min(
+            options["render_deadline"] - time.monotonic(), options["render_timeout"]
+        )
         if remaining <= 0:
             raise RenderTimeoutError("Execution deadline expired")
         renderer_types: dict[str, type[Renderer]] = {
@@ -83,9 +87,13 @@ def main() -> None:
         }
     except (DataError, BindingError, TemplateError, ValidationError):
         outcome = {
-            "code": "invalid_data",
-            "stage": "bind",
-            "message": "Datasets do not satisfy the template or data limits",
+            "code": "invalid_data" if stage == "bind" else "render_failed",
+            "stage": stage,
+            "message": (
+                "Datasets do not satisfy the template or data limits"
+                if stage == "bind"
+                else "Report export validation failed"
+            ),
         }
     except LayoutOverflowError:
         outcome = {

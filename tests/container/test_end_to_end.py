@@ -2,6 +2,7 @@ import hashlib
 import io
 import os
 import time
+from importlib.metadata import version
 from pathlib import Path
 from uuid import uuid4
 
@@ -75,7 +76,7 @@ def test_complete_report(
             == hashlib.sha256(content.content).hexdigest()
         )
         assert "attachment" in content.headers["content-disposition"]
-        assert status["engine_version"] == "0.8.1"
+        assert status["engine_version"] == version("cardreport")
         destination = ROOT / "output" / f"{name}-{renderer}.{output}"
         destination.parent.mkdir(exist_ok=True)
         destination.write_bytes(content.content)

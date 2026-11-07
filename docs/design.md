@@ -50,7 +50,9 @@ Library limits may only be reduced. Streaming HTTP does not remove these limits:
 decoding, immutable datasets, charts and page layout still materialize bounded
 input. This service is not a streaming renderer for arbitrary-size databases.
 
-Use a tested exact CardReport dependency in the deployable image/uv lock. Record
+Declare a compatible CardReport range in pyproject.toml and keep the tested exact
+version in uv.lock and the deployable image. Update the lock explicitly and rerun
+both-engine checks; never resolve a fresh version at worker startup. Record
 the service version, CardReport version and image build identifier on jobs.
 A pinned template is not a promise of byte-identical PDF output across engine,
 font or browser upgrades. Revalidate templates on load; never rewrite stored versions.
@@ -310,7 +312,7 @@ queue. Start each attempt child in its own session, with a termination handler t
 unwinds its render call so the library's finally cleanup can run. Give to_pdf a
 remaining deadline minus cleanup margin; its timeout should precede the supervisor
 backstop. Before calling to_pdf, treat nonpositive remaining time as timeout and
-cap the renderer timeout at the library maximum of 300 seconds. Do not turn an
+cap the renderer timeout at the configured PDF render timeout. Do not turn an
 expired execution budget into an input ValidationError. Do not assume killing the attempt process group kills Chromium: the
 library starts its own PDF worker with start_new_session=True (pdf.py).
 

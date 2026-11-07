@@ -18,13 +18,13 @@ def maintain(db: Database, storage: Storage, settings: Settings) -> None:
         conn.execute(
             """WITH old AS (
             SELECT id FROM reports WHERE state='queued' AND created_at<clock_timestamp()-(%s*interval '1 second')
-            FOR UPDATE SKIP LOCKED LIMIT 100
+            FOR UPDATE SKIP LOCKED LIMIT %s
         ) UPDATE reports r SET state='failed',terminal_state='failed',finished_at=clock_timestamp(),
             error='{"code":"queue_expired","stage":"queue","message":"Maximum queue age exceeded","retryable":false}'::jsonb,
             input_expires_at=clock_timestamp()+input_retention*interval '1 second',
             metadata_expires_at=clock_timestamp()+metadata_retention*interval '1 second'
             FROM old WHERE r.id=old.id""",
-            (settings.queue_max_age,),
+            (settings.queue_max_age, settings.maintenance_batch_size),
         )
         conn.execute(
             "UPDATE reports SET state='expired' WHERE (state='succeeded' AND result_expires_at<=clock_timestamp()) OR (state='failed' AND input_expires_at<=clock_timestamp())"
@@ -35,8 +35,12 @@ def maintain(db: Database, storage: Storage, settings: Settings) -> None:
             NOT result_deleted AND result_expires_at<=clock_timestamp()-(%s*interval '1 second') AS remove_result
             FROM reports WHERE (NOT input_deleted AND input_expires_at<=clock_timestamp())
             OR (NOT result_deleted AND result_expires_at<=clock_timestamp()-(%s*interval '1 second'))
-            ORDER BY finished_at LIMIT 100""",
-            (settings.download_timeout, settings.download_timeout),
+            ORDER BY finished_at LIMIT %s""",
+            (
+                settings.download_timeout,
+                settings.download_timeout,
+                settings.maintenance_batch_size,
+            ),
         ).fetchall()
     for row in rows:
         for role in ("input", "result"):
@@ -49,9 +53,12 @@ def maintain(db: Database, storage: Storage, settings: Settings) -> None:
                         (row["id"],),
                     )
     with db.pool.connection() as conn:
-        conn.execute("""DELETE FROM reports WHERE id IN (
+        conn.execute(
+            """DELETE FROM reports WHERE id IN (
             SELECT id FROM reports WHERE metadata_expires_at<=clock_timestamp() AND input_deleted
-            AND (result_key IS NULL OR result_deleted) LIMIT 100)""")
+            AND (result_key IS NULL OR result_deleted) LIMIT %s)""",
+            (settings.maintenance_batch_size,),
+        )
 
 
 class OrphanSweep:
@@ -68,7 +75,7 @@ class OrphanSweep:
         params: ListObjectsV2RequestTypeDef = {
             "Bucket": storage.bucket,
             "Prefix": storage.prefix,
-            "MaxKeys": 100,
+            "MaxKeys": settings.maintenance_batch_size,
         }
         if self.cursor:
             params["ContinuationToken"] = self.cursor

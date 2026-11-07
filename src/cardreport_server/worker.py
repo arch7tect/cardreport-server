@@ -104,7 +104,7 @@ class Worker:
                 running.deadline
                 - time.monotonic()
                 - self.settings.cleanup_grace
-                - self.settings.io_timeout * 4
+                - self.settings.io_reserve
             )
             if running.cancelled.is_set():
                 return
@@ -124,9 +124,10 @@ class Worker:
                         "input_type": attempt.input_type,
                         "output": attempt.output,
                         "renderer": attempt.renderer,
+                        "render_timeout": self.settings.render_timeout,
                         "render_deadline": running.deadline
                         - self.settings.cleanup_grace
-                        - self.settings.io_timeout * 4,
+                        - self.settings.io_reserve,
                         "data_limits": {
                             "max_rows": self.settings.data_max_rows,
                             "max_cells": self.settings.data_max_cells,
@@ -286,13 +287,20 @@ class Worker:
         self.db.open()
         self.storage.check()
         with subprocess.Popen(
-            [sys.executable, "-m", "cardreport_server", "smoke"],
+            [
+                sys.executable,
+                "-m",
+                "cardreport_server",
+                "smoke",
+                "--smoke-timeout",
+                str(self.settings.startup_render_timeout),
+            ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             env=child_environment(self.settings.temp_root),
         ) as smoke:
             try:
-                if smoke.wait(timeout=75) != 0:
+                if smoke.wait(timeout=self.settings.startup_timeout) != 0:
                     return 78
             except subprocess.TimeoutExpired:
                 recycle()
@@ -441,6 +449,7 @@ class Worker:
                             {
                                 "time": time.monotonic(),
                                 "ready": not self.broken.is_set(),
+                                "max_age": self.settings.health_max_age,
                                 "active": len(self.active),
                             }
                         )
@@ -496,6 +505,8 @@ class Worker:
 def health() -> bool:
     try:
         state = json.loads(HEALTH.read_text())
-        return bool(state["ready"] and time.monotonic() - state["time"] < 60)
+        return bool(
+            state["ready"] and time.monotonic() - state["time"] < state["max_age"]
+        )
     except (OSError, ValueError, KeyError):
         return False

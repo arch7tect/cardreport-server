@@ -48,3 +48,11 @@ Use [the Python quickstart](quickstart.md) to generate PDF and HTML.
 Scale with `docker compose --profile app up -d --scale worker=2 worker`; each worker
 has two slots by default (`WORKER_CONCURRENCY`). Native workers are not supported: detached browser cleanup
 requires a container boundary. No local Kubernetes cluster is needed for daily work.
+
+## Application settings in Compose
+
+The `CARDREPORT_` tuning values in [`.env.example`](../../.env.example) also
+configure the containers, including retries, polling, rendering and cleanup budgets.
+The four native DB/S3 connection and credential values are exceptions: the local
+stack keeps its bundled endpoints and credentials. See [applying configuration](operations.md#applying-configuration)
+for an example, restart requirements and container termination grace.

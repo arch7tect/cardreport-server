@@ -281,7 +281,7 @@ wheels = [
 
 [[package]]
 name = "cardreport"
-version = "0.8.1"
+version = "0.8.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "babel" },
@@ -293,9 +293,9 @@ dependencies = [
     { name = "referencing" },
     { name = "ruamel-yaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/36/d4/6d0cbdeb0f6b42fc5e7d57929b7767d1217c6bff454e40dd7de32b7a85d5/cardreport-0.8.1.tar.gz", hash = "sha256:2c6b983b0ac23b16fb908cd95bafee443815ea8c76ad5966397248ec0d5ff59d", size = 1896388, upload-time = "2026-11-06T05:52:27.027Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ff/55/d54a6dc9fc2d29963d1f753d12097634feebe09f417e961f2b0ed3b44d51/cardreport-0.8.2.tar.gz", hash = "sha256:f8e7c5563e8a05038742ccf2679d568039337af19f6bb3f70914e3b8fa5f08e4", size = 1904224, upload-time = "2026-11-07T03:25:06.084Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/34/71b4e97d4142df3cab56f6294eef61f7917f71f38540230335cb40d568b6/cardreport-0.8.1-py3-none-any.whl", hash = "sha256:515b8043f9dc2aae01d9b54146c849cda5d7bbd1248253fdf787bbf9dff9984a", size = 801514, upload-time = "2026-11-06T05:52:28.215Z" },
+    { url = "https://files.pythonhosted.org/packages/71/a3/10e6cf41638a6a0723918ee84b3f67d545e77aaa1a0d2b2f847d33eddd15/cardreport-0.8.2-py3-none-any.whl", hash = "sha256:10daddeb9266fff3fe04f5a5534b9b45c900e373bd1b45dab27fb83cf73134f5", size = 801996, upload-time = "2026-11-07T03:25:04.365Z" },
 ]
 
 [package.optional-dependencies]
@@ -344,7 +344,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.15,<2" },
     { name = "boto3", specifier = ">=1.37,<2" },
-    { name = "cardreport", extras = ["pdf", "weasyprint"], specifier = "==0.8.1" },
+    { name = "cardreport", extras = ["pdf", "weasyprint"], specifier = ">=0.8.2,<0.9" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "prometheus-client", specifier = ">=0.21,<1" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2,<4" },
