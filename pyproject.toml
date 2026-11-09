@@ -1,6 +1,6 @@
 [project]
 name = "cardreport-server"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Internal HTTP service for CardReport templates and report generation"
 readme = "README.md"
 requires-python = ">=3.12"

@@ -1,5 +1,7 @@
 # CardReport Server
 
+[![Latest release](https://img.shields.io/github/v/release/arch7tect/cardreport-server)](https://github.com/arch7tect/cardreport-server/releases/latest)
+
 Manage versioned report templates and generate static PDF/HTML through an internal
 HTTP API, using [CardReport](https://github.com/arch7tect/cardreport).
 
@@ -15,11 +17,18 @@ no browser or JavaScript for rendering. Unsupported features fail explicitly.
 HTML is a preview; PDF is the authoritative checked output. See
 [renderer selection](docs/user/api.md#renderer-selection) for details.
 
-**Development version; no package release yet.** The service, examples and local deployment checks are implemented; see [implementation progress](docs/implementation-plan.md) and the
-[verification record](docs/reviews/2026-11-06-verification.md). There is no built-in
+Available as a [versioned Docker image and GitHub release](docs/releases.md) for
+Linux amd64 and arm64. See [what is new](CHANGELOG.md). There is no built-in
 authentication: deploy only on a trusted internal network.
 
-## Start locally
+## Run a released image
+
+Use `ghcr.io/arch7tect/cardreport-server:0.1.0` for API, workers and migrations.
+The [installation guide](docs/releases.md#install-a-released-image) starts the full
+stack from the published image, without building it locally. For existing services,
+follow the coordinated upgrade procedure before changing images.
+
+## Develop locally
 
 Install Docker with Compose and [uv](https://docs.astral.sh/uv/), then:
 
@@ -74,6 +83,8 @@ uncertain response: it can create a duplicate job.
 - [Configuration, recovery, retention and upgrades](docs/user/operations.md)
 - [Internal Kubernetes and kind acceptance](docs/user/kubernetes.md)
 - [Development checks](docs/development.md)
+- [Releases, image installation and publication](docs/releases.md)
+- [Changelog](CHANGELOG.md)
 
 The library's dataset limits remain in force. Upload streaming bounds API
 memory; worker decoding and rendering still materialize data. There is no arbitrary

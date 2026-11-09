@@ -1,6 +1,7 @@
 # Internal Kubernetes deployment
 
-Use the same image for API, migration and workers. Plain manifests are in
+Use the same image for API, migration and workers. Released multi-platform images
+are available from GHCR; see [image installation and digests](../releases.md). Plain manifests are in
 [deploy/kubernetes](../../deploy/kubernetes). Replace the development image tag with
 an immutable registry digest and set IMAGE_ID to that digest. Provide a Secret named
 `cardreport-secrets` with DATABASE_URL/S3_ENDPOINT/S3_ACCESS_KEY/S3_SECRET_KEY, all

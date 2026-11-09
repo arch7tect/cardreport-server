@@ -91,3 +91,9 @@ test endpoints.
 The native PDF viewer checks need the full Chromium build installed by the command
 above. `--only-shell` is insufficient: those cases use `channel="chromium"`, while
 the remaining UI cases use headless-shell. No extra browser service is needed.
+
+## Release checks
+
+Stable version bumps on main publish only after both native Linux architecture
+lanes pass. See [release procedure and retry rules](releases.md). Keep the package
+version and `uv.lock` aligned; the tested image is the one uploaded to GHCR.

@@ -11,6 +11,12 @@ RUN uv sync --locked --no-dev --no-editable
 COPY alembic.ini ./
 COPY migrations ./migrations
 RUN useradd --uid 10001 --create-home app && mkdir /tmp/cardreport-worker && chown app:app /tmp/cardreport-worker
+ARG BUILD_VERSION=development
+ARG SOURCE_REVISION=development
+LABEL org.opencontainers.image.source="https://github.com/arch7tect/cardreport-server" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version=$BUILD_VERSION \
+      org.opencontainers.image.revision=$SOURCE_REVISION
 USER app
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/app/.venv/bin/python", "-m", "cardreport_server", "api", "--host", "0.0.0.0"]

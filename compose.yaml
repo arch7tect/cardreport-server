@@ -32,8 +32,13 @@ services:
 
   migrate:
     profiles: ["app"]
-    build: .
-    image: cardreport-server:local
+    build:
+      context: .
+      provenance: false
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-development}
+        SOURCE_REVISION: ${SOURCE_REVISION:-development}
+    image: ${CARDREPORT_SERVER_IMAGE:-cardreport-server:local}
     command: ["/app/.venv/bin/alembic", "upgrade", "head"]
     environment: &app-environment
       CARDREPORT_DATABASE_URL: postgresql://cardreport:local-db-only@postgres:5432/${POSTGRES_DB:-cardreport}
@@ -87,8 +92,13 @@ services:
 
   api:
     profiles: ["app"]
-    build: .
-    image: cardreport-server:local
+    build:
+      context: .
+      provenance: false
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-development}
+        SOURCE_REVISION: ${SOURCE_REVISION:-development}
+    image: ${CARDREPORT_SERVER_IMAGE:-cardreport-server:local}
     command: ["/app/.venv/bin/python", "-m", "cardreport_server", "api", "--host", "0.0.0.0"]
     environment: *app-environment
     ports: ["127.0.0.1:${API_PORT:-18000}:8000"]
@@ -106,8 +116,13 @@ services:
 
   worker:
     profiles: ["app"]
-    build: .
-    image: cardreport-server:local
+    build:
+      context: .
+      provenance: false
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-development}
+        SOURCE_REVISION: ${SOURCE_REVISION:-development}
+    image: ${CARDREPORT_SERVER_IMAGE:-cardreport-server:local}
     command: ["/app/.venv/bin/python", "-m", "cardreport_server", "worker"]
     environment:
       <<: *app-environment
