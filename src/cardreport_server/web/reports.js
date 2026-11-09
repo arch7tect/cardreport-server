@@ -1,4 +1,4 @@
-import {api, APIError, el, field, button, link, heading, notice, message, badge, date, details, select, query, copy} from './common.js';
+import {api, APIError, el, field, button, link, heading, notice, message, badge, date, duration, details, select, query, copy} from './common.js';
 
 export async function reports(root, ctx) {
   const template = el('input', {placeholder:'All templates', maxLength:64, pattern:'[a-z0-9][a-z0-9_-]{0,63}'});
@@ -94,7 +94,7 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
   }
   function render(user) {
     badgeArea.replaceChildren(badge(row.state, row.terminal_state));
-    info.replaceChildren(details([['Report ID', el('span', {class:'mono'}, row.id)], ['Template', `${row.template_id} · v${row.template_version}`], ['Renderer / output', `${row.renderer} / ${row.output.toUpperCase()}`], ['Attempts', String(row.attempts)], ['Created', date(row.created_at)], ['Started', date(row.started_at)], ['Finished', date(row.finished_at)], ['Result expires', date(row.result_expires_at)], ['Inputs expire', date(row.input_expires_at)], ['Input retention', `${row.retention_seconds} seconds`], ['Terminal state', row.terminal_state], ['Engine version', row.engine_version], ['Service version', row.service_version], ['Image', el('span', {class:'mono'}, row.image_id || '—')]]));
+    info.replaceChildren(details([['Report ID', el('span', {class:'mono'}, row.id)], ['Template', `${row.template_id} · v${row.template_version}`], ['Renderer / output', `${row.renderer} / ${row.output.toUpperCase()}`], ['Attempts', String(row.attempts)], ['Created', date(row.created_at)], ['Started', date(row.started_at)], ['Finished', date(row.finished_at)], ['Result expires', date(row.result_expires_at)], ['Inputs expire', date(row.input_expires_at)], ['Input retention', duration(row.retention_seconds)], ['Terminal state', row.terminal_state], ['Engine version', row.engine_version], ['Service version', row.service_version], ['Image', el('span', {class:'mono'}, row.image_id || '—')]]));
     message(errorBox, row.error ? `${row.error.message} (${row.error.code})${row.error.id ? ` · Reference ${row.error.id}` : ''}` : '', row.error ? 'error' : '', user);
     download.hidden = row.state !== 'succeeded'; preview.hidden = row.state !== 'succeeded' || row.output !== 'html';
     download.textContent = `Download ${row.output.toUpperCase()}`;

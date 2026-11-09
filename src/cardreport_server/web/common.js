@@ -39,6 +39,15 @@ export function date(value) {
   return new Intl.DateTimeFormat(undefined, {dateStyle: 'medium', timeStyle: 'short'}).format(new Date(value)) +
     ` (${Intl.DateTimeFormat().resolvedOptions().timeZone})`;
 }
+export function duration(seconds) {
+  if (!Number.isInteger(seconds) || seconds < 1) return '—';
+  const parts = [];
+  for (const [size, unit] of [[86400, 'day'], [3600, 'hour'], [60, 'minute'], [1, 'second']]) {
+    const count = Math.floor(seconds / size); seconds %= size;
+    if (count) parts.push(`${count} ${unit}${count === 1 ? '' : 's'}`);
+  }
+  return parts.join(' ');
+}
 export function details(entries) {
   return el('dl', {class: 'key-values'}, ...entries.flatMap(([key, value]) => [el('dt', {}, key), el('dd', {}, value ?? '—')]));
 }

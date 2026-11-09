@@ -34,8 +34,8 @@ def test_late_version_load_preserves_retention_focus(
         lambda route: pending.append(route),
     )
     page.goto(f"/ui/#/templates/{slug}")
-    retention = page.get_by_label("Retention (seconds)", exact=True)
-    expect(retention).to_have_value("7200")
+    retention = page.get_by_label("Retention (days)", exact=True)
+    expect(retention).to_have_value("0.083333")
     expect(
         page.get_by_role(
             "button", name="Load more versions", exact=True, include_hidden=True
@@ -73,14 +73,14 @@ def test_policy_and_failed_original(
             == 201
         )
     page.goto(f"/ui/#/templates/{slug}")
-    retention = page.get_by_label("Retention (seconds)", exact=True)
-    retention.fill("7200")
+    retention = page.get_by_label("Retention (days)", exact=True)
+    retention.fill("0.083333")
     page.get_by_role("button", name="Save retention", exact=True).click()
     expect(
         page.get_by_text("Retention saved for future reports.", exact=True)
     ).to_be_visible()
     page.reload()
-    expect(retention).to_have_value("7200")
+    expect(retention).to_have_value("0.083333")
     page.get_by_role("link", name="New report", exact=True).last.click()
     raw = b"total\r\nnot-an-integer\r\n"
     page.get_by_label("Data files", exact=True).set_input_files(
@@ -88,7 +88,7 @@ def test_policy_and_failed_original(
     )
     page.get_by_role("button", name="Generate report", exact=True).click()
     expect(page.locator(".badge.failed")).to_be_visible(timeout=60000)
-    expect(page.get_by_text("7200 seconds", exact=True)).to_be_visible()
+    expect(page.get_by_text("2 hours", exact=True)).to_be_visible()
     page.get_by_role("button", name="Show input files", exact=True).click()
     area = page.locator("#report-files")
     expect(area.get_by_text("summary.csv", exact=False)).to_be_visible()
@@ -111,3 +111,95 @@ def test_policy_and_failed_original(
     ).to_be_visible()
     with httpx.Client(base_url=api_url) as client:
         assert client.get(f"/v1/templates/{slug}").json()["retention_seconds"] is None
+
+
+@pytest.mark.parametrize(
+    "seconds,days,label",
+    [
+        (1, "0.000012", "1 second"),
+        (2147483000, "24855.127315", "24855 days 3 hours 3 minutes 20 seconds"),
+    ],
+)
+def test_retention_days_preserve_existing_seconds(
+    page: Page,
+    api_url: str,
+    template_spec: dict[str, object],
+    seconds: int,
+    days: str,
+    label: str,
+) -> None:
+    slug = "ui-days-" + uuid4().hex
+    with httpx.Client(base_url=api_url) as client:
+        assert (
+            client.post(
+                f"/v1/templates/{slug}/versions", json=template_spec
+            ).status_code
+            == 201
+        )
+        assert (
+            client.patch(
+                f"/v1/templates/{slug}", json={"retention_seconds": seconds}
+            ).status_code
+            == 200
+        )
+        page.goto(f"/ui/#/templates/{slug}")
+        retention = page.get_by_label("Retention (days)", exact=True)
+        expect(retention).to_have_value(days)
+        expect(
+            page.get_by_text(f"Effective retention: {label}.", exact=False)
+        ).to_be_visible()
+        page.get_by_role("button", name="Save retention", exact=True).click()
+        expect(
+            page.get_by_text("Retention saved for future reports.", exact=True)
+        ).to_be_visible()
+        assert (
+            client.get(f"/v1/templates/{slug}").json()["retention_seconds"] == seconds
+        )
+
+
+def test_retention_fraction_bounds_and_alignment(
+    page: Page, api_url: str, template_spec: dict[str, object]
+) -> None:
+    slug = "ui-fraction-" + uuid4().hex
+    with httpx.Client(base_url=api_url) as client:
+        assert (
+            client.post(
+                f"/v1/templates/{slug}/versions", json=template_spec
+            ).status_code
+            == 201
+        )
+        page.goto(f"/ui/#/templates/{slug}")
+        retention = page.get_by_label("Retention (days)", exact=True)
+        save = page.get_by_role("button", name="Save retention", exact=True)
+        expect(retention).to_have_value("")
+        box, button_box = retention.bounding_box(), save.bounding_box()
+        assert box and button_box
+        assert (
+            abs((box["y"] + box["height"]) - (button_box["y"] + button_box["height"]))
+            <= 1
+        )
+        hint = retention.get_attribute("aria-describedby")
+        assert hint
+        expect(page.locator(f"#{hint}")).to_contain_text("Leave empty")
+        retention.fill("0.5")
+        save.click()
+        expect(
+            page.get_by_text("Retention saved for future reports.", exact=True)
+        ).to_be_visible()
+        expect(
+            page.get_by_text("Effective retention: 12 hours.", exact=False)
+        ).to_be_visible()
+        assert client.get(f"/v1/templates/{slug}").json()["retention_seconds"] == 43200
+        for bad in ("0", "-1", "0.000001", "24856"):
+            retention.fill(bad)
+            save.click()
+            assert retention.evaluate("element => !element.validity.valid")
+            assert (
+                client.get(f"/v1/templates/{slug}").json()["retention_seconds"] == 43200
+            )
+        retention.fill("1")
+        save.click()
+        expect(
+            page.get_by_text("Retention saved for future reports.", exact=True)
+        ).to_be_visible()
+        assert client.get(f"/v1/templates/{slug}").json()["retention_seconds"] == 86400

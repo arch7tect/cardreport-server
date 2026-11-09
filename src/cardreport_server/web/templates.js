@@ -1,4 +1,4 @@
-import {api, el, field, button, link, heading, notice, message, badge, date, details, select, formats, formatFor, saveText, copy, mutationError, query} from './common.js';
+import {api, el, field, button, link, heading, notice, message, badge, date, duration, details, select, formats, formatFor, saveText, copy, mutationError, query} from './common.js';
 
 export async function templates(root, ctx) {
   const filter = select([['false', 'Active'], ['true', 'Archived'], ['', 'All templates']]);
@@ -58,19 +58,37 @@ export async function templateDetail(root, ctx, id, chosen = null) {
     } catch (error) { if (ctx.active) message(status, mutationError(error), 'error'); }
     finally { archive.disabled = false; }
   });
-  const retention = el('input', {type:'number', min:1, max:2147483000, step:1, value:metadata.retention_seconds ?? '', placeholder:'Use server default'});
+  const unitSeconds = 86400;
+  // Six decimal places round-trip every allowed whole-second duration in days.
+  const displayValue = seconds => seconds == null ? '' : String(Number((seconds / unitSeconds).toFixed(6)));
+  const retention = el('input', {type:'number', min:0, step:'any', value:displayValue(metadata.retention_seconds), placeholder:'Use server default'});
   const policyStatus = notice();
   const policyHint = el('p', {class:'muted'});
-  function policyInfo() { policyHint.textContent = `Effective retention: ${metadata.effective_retention_seconds} seconds (${(metadata.effective_retention_seconds / 86400).toFixed(2)} days). Applies to future reports only, from completion. Original files, normalized data and output expire together.`; }
+  function policyInfo() { policyHint.textContent = `Effective retention: ${duration(metadata.effective_retention_seconds)}. Applies to future reports only, from completion. Original files, normalized data and output expire together.`; }
+  function secondsValue() {
+    return retention.value === '' ? null : Math.round(Number(retention.value) * unitSeconds);
+  }
+  function validateRetention() {
+    const seconds = secondsValue();
+    retention.setCustomValidity(seconds !== null && (!Number.isFinite(seconds) || seconds < 1 || seconds > 2147483000)
+      ? `Enter a duration from 1 second to ${duration(2147483000)}, or leave empty.` : '');
+  }
   policyInfo();
   const savePolicy = el('button', {type:'submit'}, 'Save retention');
-  const policyForm = el('form', {}, el('div', {class:'toolbar'}, field('Retention (seconds)', retention, 'Leave empty to inherit the server default.'), savePolicy), policyHint, policyStatus);
-  policyForm.addEventListener('input', () => { ctx.dirty = true; });
+  const retentionField = field('Retention (days)', retention);
+  const help = el('p', {class:'muted', id:`${retention.id}-help`}, 'Leave empty to inherit the server default. Fractions are allowed; durations are rounded to the nearest second.');
+  retention.setAttribute('aria-describedby', help.id);
+  const policyForm = el('form', {}, el('div', {class:'toolbar'}, retentionField, savePolicy), help, policyHint, policyStatus);
+  retention.addEventListener('input', () => { validateRetention(); ctx.dirty = true; message(policyStatus, ''); });
   policyForm.addEventListener('submit', async event => {
-    event.preventDefault(); savePolicy.disabled = true; retention.disabled = true;
+    event.preventDefault(); validateRetention();
+    if (!policyForm.reportValidity()) return;
+    const seconds = secondsValue();
+    savePolicy.disabled = true; retention.disabled = true;
+    message(policyStatus, '');
     try {
-      const updated = await api(`/v1/templates/${encodeURIComponent(id)}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({retention_seconds:retention.value === '' ? null : Number(retention.value)})});
-      if (ctx.active) { Object.assign(metadata, updated); ctx.dirty = false; policyInfo(); message(policyStatus, 'Retention saved for future reports.', 'success'); }
+      const updated = await api(`/v1/templates/${encodeURIComponent(id)}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({retention_seconds:seconds})});
+      if (ctx.active) { Object.assign(metadata, updated); retention.value = displayValue(metadata.retention_seconds); ctx.dirty = false; policyInfo(); message(policyStatus, 'Retention saved for future reports.', 'success'); }
     } catch (error) { if (ctx.active) message(policyStatus, mutationError(error), 'error'); }
     finally { savePolicy.disabled = false; retention.disabled = false; }
   });

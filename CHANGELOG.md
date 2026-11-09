@@ -1,14 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - Search templates by ID or the latest report title, with case-insensitive literal
   substring matching. Show the latest title in the template list.
 - Filter report history by creation date and time, with timezone-aware boundaries.
 - Browse templates and reports in pages of 50 with Previous / Next, preserving
   filters and the current page when a page request fails.
+- Enter retention in fractional days, show readable durations, and align retention
+  controls with the save button. The API continues to use seconds.
 - Preserve form focus when background page loading finishes, so typing and clearing
   retention settings are not interrupted.
+
+No database migration is required when upgrading from 0.3.0.
 
 ## 0.3.0
 

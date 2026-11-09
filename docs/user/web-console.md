@@ -38,10 +38,13 @@ already accepted jobs. Restore enables new work. Concurrent changes are resolved
 by the server. Unsaved source stays only in page memory; navigation warns before
 discarding it. A reload or closed tab does not provide durable draft storage.
 
-The template detail's **Report retention** sets seconds for future runs, starting
-at completion. Leave empty to inherit the server default; the effective duration is
-shown in seconds and days. This setting applies to originals, normalized data and
-output, creates no new template version, and does not change existing runs. Save
+The template detail's **Report retention** sets the lifetime for future runs, starting
+at completion. Enter the number of **days**; fractions are allowed
+(for example, `0.5` days is 12 hours) and rounded to the nearest second.
+Leave empty to inherit the server default. Effective retention and
+report details use readable days/hours/minutes/seconds. Saving an unchanged value
+preserves its exact whole-second duration, including short values set through the API.
+This setting applies to originals, normalized data and output, creates no new template version, and does not change existing runs. Save
 explicitly; navigation warns about unsaved edits. Report details show the captured
 duration and input expiry. Templates themselves do not expire.
 
