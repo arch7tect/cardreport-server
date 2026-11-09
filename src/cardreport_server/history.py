@@ -58,7 +58,19 @@ def list_reports(
     state: State | None,
     after: str | None,
     limit: int,
+    created_from: datetime | None = None,
+    created_before: datetime | None = None,
 ) -> dict[str, Any]:
+    if (
+        created_from is not None
+        and created_before is not None
+        and created_from >= created_before
+    ):
+        raise APIError(
+            422,
+            "invalid_date_range",
+            "Created from must be earlier than created before",
+        )
     clauses = []
     params: list[object] = []
     if template_id is not None:
@@ -67,6 +79,12 @@ def list_reports(
     if state is not None:
         clauses.append("state=%s")
         params.append(state)
+    if created_from is not None:
+        clauses.append("created_at>=%s")
+        params.append(created_from)
+    if created_before is not None:
+        clauses.append("created_at<%s")
+        params.append(created_before)
     if after is not None:
         clauses.append("(created_at,id)<(%s,%s)")
         params.extend(decode_cursor(after))

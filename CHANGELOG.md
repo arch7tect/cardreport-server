@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Search templates by ID or the latest report title, with case-insensitive literal
+  substring matching. Show the latest title in the template list.
+- Filter report history by creation date and time, with timezone-aware boundaries.
+- Browse templates and reports in pages of 50 with Previous / Next, preserving
+  filters and the current page when a page request fails.
+
 ## 0.3.0
 
 - Preserve original input files for inspection and exact download, including failed

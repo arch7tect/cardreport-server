@@ -159,3 +159,55 @@ def test_template_page_dimensions(
         assert stored["page_dimensions_mm"] == dimensions
         assert stored["definition"] == template_spec
         assert stored["digest"] == created.json()["digest"]
+
+
+def test_template_search_and_pagination(
+    integration_settings: Settings, template_spec: dict[str, Any]
+) -> None:
+    prefix = "search-" + uuid4().hex
+    ids = [prefix + suffix for suffix in ("-a", "-b", "-c")]
+    with TestClient(create_app(integration_settings)) as client:
+        for index, slug in enumerate(ids):
+            template_spec["report"]["title"] = f"{prefix} Revenue {index}"
+            assert (
+                client.post(
+                    f"/v1/templates/{slug}/versions", json=template_spec
+                ).status_code
+                == 201
+            )
+        template_spec["report"]["title"] = f"{prefix} Budget 100% _ \\ <b>"
+        assert (
+            client.post(
+                f"/v1/templates/{ids[0]}/versions", json=template_spec
+            ).status_code
+            == 201
+        )
+        assert (
+            client.patch(f"/v1/templates/{ids[2]}", json={"archived": True}).status_code
+            == 200
+        )
+
+        params = {"q": "  " + prefix.upper() + "  ", "limit": 1, "archived": "false"}
+        first = client.get("/v1/templates", params=params).json()
+        assert [row["id"] for row in first["items"]] == ids[:1]
+        assert first["items"][0]["title"] == template_spec["report"]["title"]
+        second = client.get(
+            "/v1/templates", params=params | {"after": first["next"]}
+        ).json()
+        assert [row["id"] for row in second["items"]] == ids[1:2]
+        assert second["next"] is None
+        assert client.get("/v1/templates", params=params).json() == first
+
+        def matches(query: str, **filters: str) -> list[str]:
+            response = client.get("/v1/templates", params={"q": query, **filters})
+            assert response.status_code == 200, response.text
+            return [row["id"] for row in response.json()["items"]]
+
+        assert matches(prefix + " rEvEnUe") == ids[1:]
+        assert matches(prefix + " Revenue", archived="false") == ids[1:2]
+        assert matches(prefix, archived="true") == ids[2:]
+        assert matches(prefix + " Budget 100% _ \\ <b>") == ids[:1]
+        assert matches(prefix + " Budget 100_") == []
+        assert matches(prefix + " missing") == []
+        assert matches(ids[0].upper()) == ids[:1]
+        assert client.get("/v1/templates", params={"q": "x" * 201}).status_code == 422

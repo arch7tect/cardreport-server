@@ -187,3 +187,69 @@ def test_history_migration_and_query_plan(integration_settings: Settings) -> Non
                     assert plan is not None and index in json.dumps(plan)
         finally:
             admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
+
+
+def test_history_creation_range_and_timezone(
+    database: Database, integration_settings: Settings, template_spec: dict[str, object]
+) -> None:
+    slug = "date-history-" + uuid4().hex
+    register(database, slug, json.dumps(template_spec).encode(), "application/json")
+    start = datetime(2026, 11, 9, 8, 0, tzinfo=UTC)
+    ids = [uuid4() for _ in range(5)]
+    stamps = [
+        start - timedelta(microseconds=1),
+        start,
+        start + timedelta(minutes=30),
+        start + timedelta(hours=1) - timedelta(microseconds=1),
+        start + timedelta(hours=1),
+    ]
+    seed(database, slug, ids, stamps)
+    with TestClient(create_app(integration_settings)) as client:
+        params = {
+            "template_id": slug,
+            "state": "failed",
+            "created_from": "2026-11-09T10:00:00+02:00",
+            "created_before": "2026-11-09T09:00:00Z",
+            "limit": 2,
+        }
+        first = client.get("/v1/reports", params=params)
+        assert first.status_code == 200, first.text
+        assert [row["id"] for row in first.json()["items"]] == [
+            str(ids[3]),
+            str(ids[2]),
+        ]
+        second = client.get(
+            "/v1/reports", params=params | {"after": first.json()["next"]}
+        ).json()
+        assert [row["id"] for row in second["items"]] == [str(ids[1])]
+        assert second["next"] is None
+        assert client.get("/v1/reports", params=params).json() == first.json()
+        for boundary, value, expected in [
+            ("created_from", start.isoformat(), ids[1:]),
+            ("created_before", start.isoformat(), ids[:1]),
+        ]:
+            response = client.get(
+                "/v1/reports", params={"template_id": slug, boundary: value}
+            ).json()
+            assert {row["id"] for row in response["items"]} == {
+                str(id) for id in expected
+            }
+        for bad in [
+            {"created_from": "2026-11-09T10:00:00"},
+            {"created_before": "2026-11-09"},
+            {"created_from": "not-a-date"},
+            {
+                "created_from": "2026-11-09T10:00:00Z",
+                "created_before": "2026-11-09T10:00:00Z",
+            },
+            {
+                "created_from": "2026-11-09T10:00:00Z",
+                "created_before": "2026-11-09T09:00:00Z",
+            },
+        ]:
+            assert (
+                client.get(
+                    "/v1/reports", params={"template_id": slug} | bad
+                ).status_code
+                == 422
+            )

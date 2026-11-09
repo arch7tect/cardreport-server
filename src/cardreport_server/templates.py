@@ -96,12 +96,25 @@ def list_templates(
     archived: bool | None = None,
     after: Annotated[str, Query(max_length=64)] = "",
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    q: Annotated[
+        str,
+        Query(
+            max_length=200,
+            description="Case-insensitive substring of ID or latest report title",
+        ),
+    ] = "",
 ) -> dict[str, Any]:
+    search = q.strip()
     with request.app.state.database.pool.connection() as conn:
         rows = conn.execute(
-            "SELECT * FROM templates WHERE id>%s AND "
-            "(%s::boolean IS NULL OR archived=%s) ORDER BY id LIMIT %s",
-            (after, archived, archived, limit + 1),
+            "SELECT t.*, v.definition->'report'->>'title' AS title "
+            "FROM templates t JOIN template_versions v "
+            "ON v.template_id=t.id AND v.version=t.latest_version "
+            "WHERE t.id>%s AND (%s::boolean IS NULL OR t.archived=%s) "
+            "AND (%s='' OR strpos(lower(t.id),lower(%s))>0 "
+            "OR strpos(lower(v.definition->'report'->>'title'),lower(%s))>0) "
+            "ORDER BY t.id LIMIT %s",
+            (after, archived, archived, search, search, search, limit + 1),
         ).fetchall()
     return {
         "items": rows[:limit],

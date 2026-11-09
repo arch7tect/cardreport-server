@@ -11,7 +11,7 @@ allow access only from trusted callers. All permitted callers can mutate templat
 | Method/path | Result |
 | --- | --- |
 | POST /v1/templates/{id}/versions | Validate and create the next immutable version; 201 |
-| GET /v1/templates | Metadata list; `archived`, `after` ID and `limit` (1–100) |
+| GET /v1/templates | Metadata list with latest `title`; `q`, `archived`, `after` ID and `limit` (1–100, default 50) |
 | GET /v1/templates/{id} | Metadata and latest version |
 | GET /v1/templates/{id}/versions | Version metadata; `after` version and `limit` |
 | GET /v1/templates/{id}/versions/{version} | Metadata plus canonical `definition` |
@@ -41,6 +41,16 @@ versions and future submissions; stored definitions remain readable. Production
 clients should pin a version: another authorized caller can change latest.
 Pagination returns `items` and `next` (null when exhausted).
 
+Template lists are ordered by ID. The optional `q` searches a case-insensitive,
+literal substring of the ID or the latest version's `report.title`; surrounding
+whitespace is ignored. Maximum length: 200 characters. Empty/whitespace-only means
+no search filter. `%`, `_` and backslashes are ordinary characters, not wildcards.
+Earlier version titles are not searched. List items include `title` from the latest
+version (nullable when absent). No separate mutable template name is introduced.
+Combine `q` with `archived`; repeat both filters unchanged with each `after` cursor.
+For example: `GET /v1/templates?q=revenue&archived=false&limit=50`.
+
+
 ## Errors and health
 
 Errors use `{"error":{"code":"...","message":"..."}}`, optionally with known
@@ -58,7 +68,7 @@ migration runs implicitly. CORS is disabled by default.
 | Method/path | Result |
 | --- | --- |
 | POST /v1/reports?template_id=monthly&template_version=1&output=pdf | Stream a dataset bundle; 202 after object + job commit |
-| GET /v1/reports | Retained history; optional template_id/state, after cursor and limit (1–100, default 50) |
+| GET /v1/reports | Retained history; optional template_id/state, created_from/created_before, after cursor and limit (1–100, default 50) |
 | GET /v1/reports/{uuid} | State, pinned template, attempts, timestamps, safe error and actual versions |
 | GET /v1/reports/{uuid}/content | Stream the committed successful PDF or HTML |
 
@@ -108,6 +118,15 @@ See the [web console](web-console.md) for preview behavior and limitations.
 
 `GET /v1/reports` lists all callers' retained jobs, newest first by creation time
 and UUID. Filter by `template_id` (including archived templates) and/or one `state`.
+Filter creation time with `created_from` (inclusive) and `created_before` (exclusive).
+Both accept ISO 8601 datetimes with an explicit timezone, such as
+`2026-11-09T10:00:00+02:00` or `2026-11-09T08:00:00Z`. Omit either for an open-ended
+range. Missing timezone, invalid dates and reversed/equal bounds return 422. These
+boundaries refer to job creation, not render start/completion. They combine with
+all existing filters and must be repeated unchanged with each cursor request.
+For a whole local day, use midnight that day through midnight the following day,
+with the appropriate UTC offsets for each boundary.
+
 An unknown template filter returns an empty list. Items have the same public fields
 as report status, without storage keys, input data or ownership tokens.
 

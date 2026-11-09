@@ -3,7 +3,7 @@ import re
 from uuid import uuid4
 
 import pytest
-from playwright.sync_api import Page, Route, expect
+from playwright.sync_api import Browser, Page, Route, expect
 
 pytestmark = pytest.mark.ui
 
@@ -220,7 +220,13 @@ def test_history_filter_resets_cursor(page: Page) -> None:
 
     page.route("**/v1/reports*", history)
     page.goto("/ui/#/reports")
-    page.get_by_role("button", name="Load more", exact=True).click()
+    page.get_by_role("button", name="Next", exact=True).click()
+    expect(page.get_by_role("link", name=second[:8], exact=True)).to_be_visible()
+    expect(page.get_by_role("link", name=first[:8], exact=True)).to_have_count(0)
+    page.get_by_role("button", name="Previous", exact=True).click()
+    expect(page.get_by_role("link", name=first[:8], exact=True)).to_be_visible()
+    expect(page.get_by_role("link", name=second[:8], exact=True)).to_have_count(0)
+    page.get_by_role("button", name="Next", exact=True).click()
     expect(page.get_by_role("link", name=second[:8], exact=True)).to_be_visible()
     page.get_by_label("State", exact=True).select_option("failed")
     expect(page.get_by_role("link", name=second[:8], exact=True)).to_have_count(0)
@@ -279,7 +285,7 @@ def test_failed_filter_clears_previous_page(page: Page, screen: str) -> None:
     ).select_option("failed" if screen == "reports" else "true")
     expect(page.get_by_text("Try later", exact=False)).to_be_visible()
     expect(page.locator("tbody tr")).to_have_count(0)
-    expect(page.get_by_role("button", name="Load more", exact=True)).to_be_hidden()
+    expect(page.get_by_role("button", name="Next", exact=True)).to_be_disabled()
 
 
 def test_background_poll_preserves_focus(page: Page) -> None:
@@ -366,3 +372,152 @@ def test_template_save_errors_keep_source(page: Page, status: int) -> None:
     expect(page.get_by_label("Template source", exact=True)).to_have_value(
         '{"draft": true}'
     )
+
+
+def test_history_dates_and_page_retry(browser: Browser, api_url: str) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    context = browser.new_context(base_url=api_url, timezone_id="Asia/Nicosia")
+    page = context.new_page()
+    ids = [str(uuid4()) for _ in range(51)]
+    calls: list[dict[str, list[str]]] = []
+    failed = False
+
+    def history(route: Route) -> None:
+        nonlocal failed
+        query = parse_qs(urlsplit(route.request.url).query)
+        calls.append(query)
+        later = query.get("after") == ["next-page"]
+        if later and not failed:
+            failed = True
+            route.fulfill(
+                status=503,
+                json={
+                    "error": {
+                        "code": "unavailable",
+                        "message": "Temporary history failure",
+                    }
+                },
+            )
+            return
+        route.fulfill(
+            json={
+                "items": [
+                    report(id, "failed") for id in (ids[50:] if later else ids[:50])
+                ],
+                "next": None if later else "next-page",
+            }
+        )
+
+    page.route("**/v1/reports*", history)
+    try:
+        page.goto("/ui/#/reports")
+        expect(page.get_by_text("Page 1 · 50 reports", exact=True)).to_be_visible()
+        page.get_by_label("Created from", exact=True).fill("2026-11-09T10:00")
+        page.get_by_label("Created before", exact=True).fill("2026-11-09T11:00")
+        page.get_by_role("button", name="Refresh", exact=True).click()
+        expect(page.get_by_role("button", name="Next", exact=True)).to_be_enabled()
+        page.get_by_role("button", name="Next", exact=True).click()
+        expect(
+            page.get_by_text("History could not be refreshed.", exact=False)
+        ).to_be_visible()
+        expect(page.get_by_text("Page 1 · 50 reports", exact=True)).to_be_visible()
+        expect(page.locator("tbody tr")).to_have_count(50)
+        page.get_by_role("button", name="Next", exact=True).click()
+        expect(page.get_by_text("Page 2 · 1 reports", exact=True)).to_be_visible()
+        expect(page.locator("tbody tr")).to_have_count(1)
+        expect(page.get_by_role("button", name="Next", exact=True)).to_be_disabled()
+        assert calls[-1]["created_from"] == ["2026-11-09T08:00:00.000Z"]
+        assert calls[-1]["created_before"] == ["2026-11-09T09:00:00.000Z"]
+        page.get_by_role("button", name="Previous", exact=True).click()
+        expect(page.locator("tbody tr")).to_have_count(50)
+        assert "after" not in calls[-1] and "created_from" in calls[-1]
+        page.get_by_label("Created before", exact=True).fill("2026-11-09T09:00")
+        page.get_by_role("button", name="Refresh", exact=True).click()
+        expect(
+            page.get_by_text(
+                "Created from must be earlier than created before.", exact=True
+            )
+        ).to_be_visible()
+        expect(page.get_by_role("button", name="Next", exact=True)).to_be_disabled()
+        page.get_by_role("button", name="Clear filters", exact=True).click()
+        expect(page.locator("tbody tr")).to_have_count(50)
+        assert not {"created_from", "created_before", "after"} & calls[-1].keys()
+        page.get_by_label("Created from", exact=True).fill("2026-03-29T03:30")
+        page.get_by_role("button", name="Refresh", exact=True).click()
+        expect(
+            page.get_by_text("Choose a valid local time in Asia/Nicosia.", exact=True)
+        ).to_be_visible()
+    finally:
+        context.close()
+
+
+def test_template_search_pages_and_retry(page: Page) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    calls: list[dict[str, list[str]]] = []
+    failed = False
+
+    def templates(route: Route) -> None:
+        nonlocal failed
+        query = parse_qs(urlsplit(route.request.url).query)
+        calls.append(query)
+        later = query.get("after") == ["template-49"]
+        if later and not failed:
+            failed = True
+            route.fulfill(
+                status=503, json={"error": {"message": "Retry template page"}}
+            )
+            return
+        route.fulfill(
+            json={
+                "items": [
+                    {
+                        "id": f"template-{i:02}",
+                        "title": "Revenue <b>report</b>",
+                        "archived": query.get("archived") == ["true"],
+                        "latest_version": 2,
+                        "created_at": None,
+                    }
+                    for i in (range(50, 51) if later else range(50))
+                ],
+                "next": None if later else "template-49",
+            }
+        )
+
+    page.route(re.compile(r"/v1/templates(?:\?.*)?$"), templates)
+    page.goto("/ui/#/templates")
+    expect(page.locator("tbody tr")).to_have_count(50)
+    expect(page.get_by_text("Revenue <b>report</b>", exact=True).first).to_be_visible()
+    expect(page.locator("tbody b")).to_have_count(0)
+    page.get_by_label("Search templates", exact=True).fill(" Revenue ")
+    page.get_by_role("button", name="Search", exact=True).click()
+    page.get_by_label("Show", exact=True).select_option("true")
+    page.get_by_role("button", name="Next", exact=True).click()
+    expect(page.get_by_text("Retry template page", exact=True)).to_be_visible()
+    expect(page.locator("tbody tr")).to_have_count(50)
+    page.get_by_role("button", name="Next", exact=True).click()
+    expect(page.get_by_text("Page 2 · 1 templates", exact=True)).to_be_visible()
+    expect(page.locator("tbody tr")).to_have_count(1)
+    assert calls[-1] == {
+        "archived": ["true"],
+        "q": ["Revenue"],
+        "after": ["template-49"],
+        "limit": ["50"],
+    }
+    expect(page.get_by_role("button", name="Next", exact=True)).to_be_disabled()
+    page.get_by_role("button", name="Previous", exact=True).click()
+    expect(page.locator("tbody tr")).to_have_count(50)
+    assert "after" not in calls[-1] and calls[-1]["q"] == ["Revenue"]
+    page.get_by_role("button", name="Next", exact=True).click()
+    expect(page.locator("tbody tr")).to_have_count(1)
+    page.get_by_label("Search templates", exact=True).fill("template")
+    page.get_by_label("Search templates", exact=True).press("Enter")
+    expect(page.locator("tbody tr")).to_have_count(50)
+    assert calls[-1]["q"] == ["template"] and "after" not in calls[-1]
+    expect(page.get_by_role("button", name="Previous", exact=True)).to_be_disabled()
+    page.get_by_role("button", name="Clear filters", exact=True).click()
+    expect(page.get_by_label("Search templates", exact=True)).to_have_value("")
+    expect(page.get_by_label("Show", exact=True)).to_have_value("false")
+    expect(page.locator("tbody tr")).to_have_count(50)
+    assert "q" not in calls[-1] and "after" not in calls[-1]

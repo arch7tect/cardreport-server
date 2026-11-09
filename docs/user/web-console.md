@@ -11,7 +11,19 @@ there is no per-user access control or private report history.
 ## Templates
 
 Browse active/archived templates, open metadata and choose an immutable version.
-Load more exposes additional templates and versions. Create a template by importing
+**Search templates** matches any part of the ID or the latest version's report title,
+without case sensitivity. The latest title appears below the ID; old version titles
+are not searched. Apply with **Search**, Enter or by leaving the search field.
+
+**Previous / Next** show up to 50 templates per page while preserving the search
+and Active / Archived / All filter. Search/filter changes and **Refresh** start at
+the first matching page. **Clear filters** clears the search and restores Active.
+A failed page request preserves the current rows for retry. There is no total page
+count; this is a live list, not a snapshot. Filters and page history reset when you
+leave or reload the view. **Load more versions** still expands the version selector
+on a template detail page.
+
+Create a template by importing
 JSON/YAML or pasting source and choosing its format. Save validates the source and
 creates a version; an error retains the editor contents. The safe API error may
 include a template path, not the full library traceback.
@@ -76,9 +88,20 @@ A closed or navigated-away page does not cancel server work.
 
 ## History, status and results
 
-Reports lists retained jobs from every caller, with template ID and state filters.
-Refresh starts at the newest page; Load more continues without reordering the rows
-you are reading. The list is a live view, so concurrent commits/state changes and
+Reports lists retained jobs from every caller, with template ID, state and creation
+time filters. **Created from** includes the chosen time; **Created before** excludes
+it. Either can be left empty. Times use the browser's displayed timezone and are
+sent to the API with an explicit UTC offset. For all of November 9, choose November
+9 at 00:00 through November 10 at 00:00. Nonexistent local times during a daylight
+saving transition are rejected; for a repeated hour, browser conversion chooses
+the earlier occurrence. The API accepts explicit offsets when that distinction matters.
+
+Each page contains at most 50 reports. **Previous / Next** replace the current page
+and preserve all filters. Changing a filter, **Clear filters**, or **Refresh** starts
+at the newest matching page. A failed page request keeps the current page, so it can
+be retried without skipping rows. There is no total page count. Filters and cursor
+history remain in this view only; reloading or leaving it starts a fresh search.
+The list is a live view, so concurrent commits/state changes and
 retention are not a frozen snapshot. Expired rows retain the former terminal state,
 including failed jobs. Once metadata retention ends, a report is no longer listed.
 

@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 import anyio
 from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import JSONResponse
+from pydantic import AwareDatetime
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 
@@ -118,6 +119,14 @@ def report_history(
     state: history.State | None = None,
     after: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    created_from: Annotated[
+        AwareDatetime | None,
+        Query(description="Creation time, inclusive; ISO 8601 with timezone"),
+    ] = None,
+    created_before: Annotated[
+        AwareDatetime | None,
+        Query(description="Creation time, exclusive; ISO 8601 with timezone"),
+    ] = None,
 ) -> dict[str, Any]:
     return history.list_reports(
         request.app.state.database,
@@ -125,6 +134,8 @@ def report_history(
         state=state,
         after=after,
         limit=limit,
+        created_from=created_from,
+        created_before=created_before,
     )
 
 

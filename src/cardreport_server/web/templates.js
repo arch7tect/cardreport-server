@@ -2,26 +2,44 @@ import {api, el, field, button, link, heading, notice, message, badge, date, det
 
 export async function templates(root, ctx) {
   const filter = select([['false', 'Active'], ['true', 'Archived'], ['', 'All templates']]);
-  const status = notice(), body = el('tbody'), more = button('Load more', () => load(false));
+  const search = el('input', {type:'search', placeholder:'Name or ID', maxLength:200});
+  const status = notice(), body = el('tbody'), pageLabel = el('span', {class:'muted'});
+  const previous = button('Previous', () => load('previous')), next = button('Next', () => load('next'));
+  const filters = el('form', {class:'toolbar'}, field('Search templates', search), field('Show', filter),
+    el('button', {type:'submit'}, 'Search'), button('Refresh', () => load('reset')), button('Clear filters', () => {
+      search.value = ''; filter.value = 'false'; load('reset');
+    }));
   const table = el('div', {class:'panel flush'}, el('div', {class:'table-wrap'}, el('table', {},
-    el('thead', {}, el('tr', {}, ...['Template', 'State', 'Latest version', 'Created'].map(x => el('th', {}, x)))), body)), el('div', {class:'table-footer'}, more));
+    el('thead', {}, el('tr', {}, ...['Template', 'State', 'Latest version', 'Created'].map(x => el('th', {}, x)))), body)),
+    el('div', {class:'table-footer actions'}, previous, pageLabel, next));
   root.replaceChildren(heading('Templates', 'Versioned definitions, ready to reuse with fresh data.', link('＋ Create template', '#/create-template', true)),
-    el('div', {class:'toolbar'}, field('Show', filter), button('Refresh', () => load(true))), status, table);
-  let after = '', request = 0;
-  async function load(reset) {
-    const token = ++request; more.disabled = true;
-    if (reset) { body.replaceChildren(); after = ''; more.hidden = true; }
+    filters, status, table);
+  let cursors = [''], page = 0, nextCursor = null, request = 0, applied = {};
+  async function load(direction = 'reset') {
+    const token = ++request; previous.disabled = true; next.disabled = true;
+    if (direction === 'reset') {
+      page = 0; cursors = ['']; nextCursor = null; body.replaceChildren(); pageLabel.textContent = '';
+      if (!filters.reportValidity()) return;
+      applied = {archived:filter.value, q:search.value.trim()};
+    }
+    const target = direction === 'next' ? page+1 : direction === 'previous' ? page-1 : 0;
+    const cursor = direction === 'next' ? nextCursor : cursors[target];
     try {
-      const data = await api(query('/v1/templates', {archived:filter.value, after: reset ? '' : after}), {}, ctx.controller.signal);
+      const data = await api(query('/v1/templates', {...applied, after:cursor, limit:50}), {}, ctx.controller.signal);
       if (!ctx.active || token !== request) return;
-      if (reset) body.replaceChildren();
-      for (const row of data.items) body.append(el('tr', {}, el('td', {}, link(row.id, `#/templates/${row.id}`)), el('td', {}, badge(row.archived ? 'archived' : 'active')), el('td', {}, `v${row.latest_version}`), el('td', {}, date(row.created_at))));
-      after = data.next; more.hidden = !after;
-      message(status, body.children.length ? '' : 'No templates match this filter. Create one or change the filter.');
+      body.replaceChildren();
+      for (const row of data.items) body.append(el('tr', {}, el('td', {}, link(row.id, `#/templates/${row.id}`),
+        row.title ? el('div', {class:'muted'}, row.title) : null), el('td', {}, badge(row.archived ? 'archived' : 'active')),
+        el('td', {}, `v${row.latest_version}`), el('td', {}, date(row.created_at))));
+      page = target; cursors = cursors.slice(0, target); cursors.push(cursor); nextCursor = data.next;
+      pageLabel.textContent = `Page ${page+1} · ${data.items.length} templates`;
+      message(status, data.items.length ? '' : 'No templates match these filters. Create one or change the filters.');
     } catch (error) { if (ctx.active && token === request) message(status, error.message, 'error'); }
-    finally { if (ctx.active && token === request) more.disabled = false; }
+    finally { if (ctx.active && token === request) { previous.disabled = page === 0; next.disabled = !nextCursor; } }
   }
-  filter.addEventListener('change', () => load(true)); await load(true);
+  filters.addEventListener('submit', event => {event.preventDefault(); load('reset');});
+  for (const control of [filter, search]) control.addEventListener('change', () => load('reset'));
+  await load();
 }
 
 export async function templateDetail(root, ctx, id, chosen = null) {

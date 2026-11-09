@@ -3,31 +3,55 @@ import {api, APIError, el, field, button, link, heading, notice, message, badge,
 export async function reports(root, ctx) {
   const template = el('input', {placeholder:'All templates', maxLength:64, pattern:'[a-z0-9][a-z0-9_-]{0,63}'});
   const state = select([['','All states'], ...['queued','running','succeeded','failed','expired'].map(x => [x,x[0].toUpperCase()+x.slice(1)])]);
-  const status = notice(), body = el('tbody'), more = button('Load more', () => load(false));
-  const filters = el('form', {class:'toolbar'}, field('Template ID', template), field('State', state), el('button', {type:'submit'}, 'Refresh'));
+  const from = el('input', {type:'datetime-local', step:1}), before = el('input', {type:'datetime-local', step:1});
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const status = notice(), body = el('tbody'), pageLabel = el('span', {class:'muted'});
+  const previous = button('Previous', () => load('previous')), next = button('Next', () => load('next'));
+  const filters = el('form', {class:'toolbar'}, field('Template ID', template), field('State', state),
+    field('Created from', from), field('Created before', before), el('button', {type:'submit'}, 'Refresh'), button('Clear filters', () => {
+      template.value = ''; state.value = ''; from.value = ''; before.value = ''; load('reset');
+    }));
   root.replaceChildren(heading('Reports', 'Shared history of retained jobs, newest first.', link('＋ New report', '#/new-report', true)),
-    filters, status, el('div', {class:'panel flush'}, el('div', {class:'table-wrap'}, el('table', {},
+    filters, el('p', {class:'muted'}, `Creation time in ${zone}. From is inclusive; before is exclusive. Leave either boundary empty for an open-ended search.`), status,
+    el('div', {class:'panel flush'}, el('div', {class:'table-wrap'}, el('table', {},
       el('thead', {}, el('tr', {}, ...['Report', 'Template', 'State', 'Output', 'Created'].map(x => el('th', {}, x)))), body)),
-      el('div', {class:'table-footer'}, more)));
-  let after = '', token = 0, applied = {};
-  async function load(reset) {
-    const request = ++token; more.disabled = true;
-    if (reset) { applied = {template_id:template.value.trim(), state:state.value}; after = ''; body.replaceChildren(); more.hidden = true; }
+      el('div', {class:'table-footer actions'}, previous, pageLabel, next)));
+  let cursors = [''], page = 0, nextCursor = null, token = 0, applied = {};
+  function timestamp(control) {
+    if (!control.value) return '';
+    const date = new Date(control.value), parts = control.value.split(/\D/).map(Number);
+    const actual = [date.getFullYear(), date.getMonth()+1, date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds()];
+    if (Number.isNaN(date.getTime()) || parts.some((part, index) => actual[index] !== part)) throw new Error(`Choose a valid local time in ${zone}.`);
+    return date.toISOString();
+  }
+  async function load(direction = 'reset') {
+    const request = ++token; previous.disabled = true; next.disabled = true;
+    if (direction === 'reset') {
+      page = 0; cursors = ['']; nextCursor = null; body.replaceChildren(); pageLabel.textContent = '';
+      if (!filters.reportValidity()) return;
+      try {
+        applied = {template_id:template.value.trim(), state:state.value, created_from:timestamp(from), created_before:timestamp(before)};
+        if (applied.created_from && applied.created_before && applied.created_from >= applied.created_before) throw new Error('Created from must be earlier than created before.');
+      } catch (error) { message(status, error.message, 'error'); return; }
+    }
+    const target = direction === 'next' ? page+1 : direction === 'previous' ? page-1 : 0;
+    const cursor = direction === 'next' ? nextCursor : cursors[target];
     try {
-      const data = await api(query('/v1/reports', {...applied, after:reset ? '' : after}), {}, ctx.controller.signal);
+      const data = await api(query('/v1/reports', {...applied, after:cursor, limit:50}), {}, ctx.controller.signal);
       if (!ctx.active || request !== token) return;
-      if (reset) body.replaceChildren();
+      body.replaceChildren();
       for (const row of data.items) body.append(el('tr', {}, el('td', {}, link(row.id.slice(0,8), `#/reports/${row.id}`)),
         el('td', {}, link(row.template_id, `#/templates/${row.template_id}?version=${row.template_version}`), el('div', {class:'muted'}, `Version ${row.template_version}`)),
         el('td', {}, badge(row.state, row.terminal_state)), el('td', {}, row.output.toUpperCase(), el('div', {class:'muted'}, row.renderer)), el('td', {}, date(row.created_at))));
-      after = data.next; more.hidden = !after; message(status, body.children.length ? '' : 'No retained reports match these filters.');
+      page = target; cursors = cursors.slice(0, target); cursors.push(cursor); nextCursor = data.next;
+      pageLabel.textContent = `Page ${page+1} · ${data.items.length} reports`;
+      message(status, data.items.length ? '' : 'No retained reports match these filters.');
     } catch (error) { if (ctx.active && request === token) message(status, `History could not be refreshed. ${error.message}`, 'error'); }
-    finally { if (request === token) more.disabled = false; }
+    finally { if (request === token) { previous.disabled = page === 0; next.disabled = !nextCursor; } }
   }
-  filters.addEventListener('submit', event => {event.preventDefault(); load(true);});
-  state.addEventListener('change', () => load(true));
-  template.addEventListener('change', () => load(true));
-  await load(true);
+  filters.addEventListener('submit', event => {event.preventDefault(); load('reset');});
+  for (const control of [state, template, from, before]) control.addEventListener('change', () => load('reset'));
+  await load();
 }
 
 export async function reportDetail(root, ctx, id, params = new URLSearchParams()) {

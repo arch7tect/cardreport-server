@@ -107,7 +107,7 @@ originals, normalized data and output. See
 
 - [Python quickstart and JSON/YAML/CSV examples](docs/user/quickstart.md)
 - [Web console](docs/user/web-console.md)
-- [HTTP API, status and error contract](docs/user/api.md)
+- [HTTP API, history filters, status and error contract](docs/user/api.md)
 - [Local Compose and PyCharm setup](docs/user/local-development.md)
 - [Configuration, recovery, retention and upgrades](docs/user/operations.md)
 - [Internal Kubernetes and kind acceptance](docs/user/kubernetes.md)
