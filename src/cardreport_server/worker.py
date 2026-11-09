@@ -25,6 +25,7 @@ from psycopg_pool import PoolTimeout
 from . import jobs
 from .datasets import SNAPSHOT_LIMIT
 from .db import Database
+from .input_files import read_results
 from .render_child import child_environment
 from .settings import Settings
 from .storage import Storage
@@ -161,6 +162,13 @@ class Worker:
                 # A dead parent may leave detached Chromium alive. Only the container is a safe boundary.
                 recycle()
             outcome = json.loads((directory / "outcome.json").read_text())
+            try:
+                files = read_results(directory, attempt.input_type)
+            except ValueError:
+                log.warning(
+                    "Discarding invalid file diagnostics for %s", attempt.report_id
+                )
+                files = None
             if running.cancelled.is_set():
                 return
             if outcome.get("code") == "renderer_unavailable":
@@ -176,7 +184,7 @@ class Worker:
                         outcome.get("id"),
                         internal_type,
                     )
-                self.complete(attempt, outcome)
+                self.complete(attempt, outcome, files)
                 return
             result = directory / "result"
             size = result.stat().st_size
@@ -188,6 +196,7 @@ class Worker:
                         "stage": "render",
                         "message": "Report exceeds the output size limit",
                     },
+                    files,
                 )
                 return
             key = (
@@ -204,6 +213,7 @@ class Worker:
                         "stage": "bind",
                         "message": "Normalized report data exceeds the 16 MiB snapshot limit",
                     },
+                    files,
                 )
                 return
             data_key = (
@@ -232,6 +242,7 @@ class Worker:
                         "size": data_size,
                         "hash": hashlib.sha256(data_path.read_bytes()).hexdigest(),
                     },
+                    files=files,
                     engine_version=version("cardreport"),
                     image_id=self.settings.image_id,
                     service_version=version("cardreport-server"),
@@ -276,11 +287,17 @@ class Worker:
                     recycle()
             shutil.rmtree(directory, ignore_errors=True)
 
-    def complete(self, attempt: jobs.Attempt, error: dict[str, object]) -> None:
+    def complete(
+        self,
+        attempt: jobs.Attempt,
+        error: dict[str, object],
+        files: list[dict[str, object]] | None = None,
+    ) -> None:
         jobs.finish(
             self.db,
             attempt,
             error=error | {"retryable": False},
+            files=files,
             engine_version=version("cardreport"),
             image_id=self.settings.image_id,
             service_version=version("cardreport-server"),

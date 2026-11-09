@@ -114,9 +114,7 @@ export async function newReport(root, ctx, params) {
         message(status, 'CSV files must have distinct dataset names. Remove the duplicate file.', 'error'); return;
       }
       size = selectedFiles.reduce((total, source) => total + source.size, 0);
-      if (selectedFiles.length === 1 && !csvs.length) {
-        payload = selectedFiles[0]; headers = {'Content-Type':formatFor(payload.name)};
-      } else {
+      {
         payload = new FormData();
         for (const source of selectedFiles) payload.append('files', source);
         if (csvs.length) {

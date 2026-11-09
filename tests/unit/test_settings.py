@@ -22,7 +22,7 @@ from cardreport_server.settings import Settings
         {"orphan_grace": 60},
         {"temp_root": "/"},
         {"s3_endpoint": "file:///tmp"},
-        {"metadata_retention": 10},
+        {"input_retention": 10},
     ],
 )
 def test_invalid_limits(settings: Settings, changes: dict[str, object]) -> None:
@@ -33,3 +33,11 @@ def test_invalid_limits(settings: Settings, changes: dict[str, object]) -> None:
 def test_secrets_not_in_repr(settings: Settings) -> None:
     assert "postgresql://u:p" not in repr(settings)
     assert settings.worker_concurrency == 2
+
+
+@pytest.mark.parametrize("value", [3600, "1h", "", True])
+def test_retired_setting_has_migration_message(
+    settings: Settings, value: object
+) -> None:
+    with pytest.raises(ValidationError, match="INPUT_RETENTION was retired"):
+        Settings.model_validate(settings.model_dump() | {"input_retention": value})

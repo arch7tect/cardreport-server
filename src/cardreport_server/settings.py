@@ -5,7 +5,7 @@ from typing import Self
 from urllib.parse import urlsplit
 
 from psycopg.conninfo import conninfo_to_dict
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,15 +51,24 @@ class Settings(BaseSettings):
     queue_max_age: int = Field(default=3600, ge=1)
     retry_delay: float = Field(default=5, ge=0, le=120)
     retry_max_delay: float = Field(default=120, ge=0)
-    input_retention: int = Field(default=3600, ge=1)
-    result_retention: int = Field(default=86400, ge=1)
-    metadata_retention: int = Field(default=604800, ge=1)
+    input_retention: int | None = None
+    result_retention: int = Field(default=86400, ge=1, le=2147483000)
+    metadata_retention: int = Field(default=604800, ge=1, le=2147483647)
     download_timeout: float = Field(default=120, gt=0, le=600)
     orphan_grace: int = Field(default=900, ge=1)
     maintenance_interval: float = Field(default=30, ge=0.2, le=300)
     maintenance_batch_size: int = Field(default=100, ge=1, le=1000)
     temp_root: Path = Path("/tmp/cardreport-worker")
     image_id: str = "development"
+
+    @field_validator("input_retention", mode="before")
+    @classmethod
+    def retired_input_retention(cls, value: object) -> None:
+        if value is not None:
+            raise ValueError(
+                "INPUT_RETENTION was retired in 0.3; use RESULT_RETENTION for all report artifacts"
+            )
+        return None
 
     @property
     def io_reserve(self) -> float:
@@ -111,11 +120,6 @@ class Settings(BaseSettings):
             raise ValueError(
                 "orphan_grace must exceed upload/attempt duration plus I/O margin"
             )
-        if (
-            self.metadata_retention
-            <= max(self.input_retention, self.result_retention) + self.download_timeout
-        ):
-            raise ValueError("metadata retention must outlast artifacts and downloads")
         if not self.temp_root.is_absolute() or len(self.temp_root.parts) < 3:
             raise ValueError("temp_root must be a dedicated absolute subdirectory")
         return self

@@ -31,12 +31,14 @@ def maintain(db: Database, storage: Storage, settings: Settings) -> None:
         )
         rows = conn.execute(
             """SELECT id,input_key,result_key,data_key,
-            NOT input_deleted AND input_expires_at<=clock_timestamp() AS remove_input,
+            NOT input_deleted AND input_expires_at<=clock_timestamp()-(%s*interval '1 second') AS remove_input,
             NOT result_deleted AND result_expires_at<=clock_timestamp()-(%s*interval '1 second') AS remove_result
-            FROM reports WHERE (NOT input_deleted AND input_expires_at<=clock_timestamp())
+            FROM reports WHERE (NOT input_deleted AND input_expires_at<=clock_timestamp()-(%s*interval '1 second'))
             OR (NOT result_deleted AND result_expires_at<=clock_timestamp()-(%s*interval '1 second'))
             ORDER BY finished_at LIMIT %s""",
             (
+                settings.download_timeout,
+                settings.download_timeout,
                 settings.download_timeout,
                 settings.download_timeout,
                 settings.maintenance_batch_size,

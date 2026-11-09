@@ -2,14 +2,14 @@
 
 import hashlib
 from importlib.metadata import version
-from typing import Annotated, Any
+from typing import Annotated, Any, Self
 
 import anyio
 from cardreport import Page as ReportPage
 from cardreport import ReportTemplate, TemplateError
 from fastapi import APIRouter, Path, Query, Request
 from psycopg.types.json import Json
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette.concurrency import run_in_threadpool
 
 from .db import Database
@@ -117,7 +117,10 @@ def get_template(template_id: Slug, request: Request) -> dict[str, Any]:
         ).fetchone()
     if row is None:
         raise APIError(404, "template_not_found", "Template does not exist")
-    return dict(row)
+    return dict(row) | {
+        "effective_retention_seconds": row["retention_seconds"]
+        or request.app.state.settings.result_retention
+    }
 
 
 @router.get("/{template_id}/versions")
@@ -160,21 +163,41 @@ def get_version(
     }
 
 
-class ArchiveChange(BaseModel):
+class TemplateChange(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    archived: bool
+    archived: bool | None = None
+    retention_seconds: int | None = Field(default=None, ge=1, le=2147483000)
+
+    @model_validator(mode="after")
+    def nonempty(self) -> Self:
+        if not self.model_fields_set or (
+            "archived" in self.model_fields_set and self.archived is None
+        ):
+            raise ValueError(
+                "Supply archived (boolean) or retention_seconds (positive seconds or null)"
+            )
+        return self
 
 
 @router.patch("/{template_id}")
-def archive(
-    template_id: Slug, change: ArchiveChange, request: Request
+def update_template(
+    template_id: Slug, change: TemplateChange, request: Request
 ) -> dict[str, Any]:
     ensure_admission(request)
+    fields = [
+        name
+        for name in ("archived", "retention_seconds")
+        if name in change.model_fields_set
+    ]
+    assignments = ",".join(name + "=%s" for name in fields)
     with request.app.state.database.pool.connection() as conn:
         row = conn.execute(
-            "UPDATE templates SET archived=%s WHERE id=%s RETURNING *",
-            (change.archived, template_id),
+            f"UPDATE templates SET {assignments} WHERE id=%s RETURNING *",
+            (*[getattr(change, name) for name in fields], template_id),
         ).fetchone()
     if row is None:
         raise APIError(404, "template_not_found", "Template does not exist")
-    return dict(row)
+    return dict(row) | {
+        "effective_retention_seconds": row["retention_seconds"]
+        or request.app.state.settings.result_retention
+    }

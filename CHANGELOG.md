@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0
+
+- Preserve original input files for inspection and exact download, including failed
+  reports. Show per-file parse results and dataset names in the web console.
+- Download an investigation ZIP with original files, the raw request, pinned template,
+  submitted CSV options, safe error and recorded execution versions.
+- Configure retention per template, with a server default. New jobs snapshot one
+  lifetime for originals, normalized data and output; existing jobs are unchanged.
+- Add input download grace, bounded file viewers and API/Python replay documentation.
+
+Upgrade requires coordinated API/worker replacement and migration 0008. Remove
+`CARDREPORT_INPUT_RETENTION`; `CARDREPORT_RESULT_RETENTION` is now the shared default
+(24 hours). Old uploads remain downloadable only while still retained; old reports
+have no parse diagnostics. Templates and versions do not expire.
+
 ## 0.2.0
 
 - Generate reports from multiple JSON, YAML and CSV files in one submission.

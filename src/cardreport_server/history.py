@@ -13,6 +13,8 @@ from .errors import APIError
 State = Literal["queued", "running", "succeeded", "failed", "expired"]
 STATUS_COLUMNS = """id,template_id,template_version,state,output_kind AS output,renderer,
 attempt_no AS attempts,created_at,started_at,finished_at,result_expires_at,
+input_expires_at,input_retention AS retention_seconds,
+(NOT input_deleted AND state!='expired' AND (input_expires_at IS NULL OR input_expires_at>clock_timestamp())) AS inputs_available,
 error,terminal_state,engine_version,image_id,service_version,
 (data_key IS NOT NULL AND NOT result_deleted AND state='succeeded' AND result_expires_at>clock_timestamp()) AS data_available"""
 

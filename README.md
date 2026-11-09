@@ -23,7 +23,7 @@ authentication: deploy only on a trusted internal network.
 
 ## Run a released image
 
-Use `ghcr.io/arch7tect/cardreport-server:0.2.0` for API, workers and migrations.
+Use `ghcr.io/arch7tect/cardreport-server:0.3.0` for API, workers and migrations.
 The [installation guide](docs/releases.md#install-a-released-image) starts the full
 stack from the published image, without building it locally. For existing services,
 follow the coordinated upgrade procedure before changing images.
@@ -95,7 +95,11 @@ accepts JSON, YAML and CSV together, in one selection or several. Remove any fil
 with its × button before submitting. CSV types come from the stored template;
 JSON/YAML bundles contain their own dataset names. Names must not overlap.
 After generation, **Show data** displays the datasets used for that report;
-**Download data JSON** saves their immutable typed snapshot. See
+**Download data JSON** saves their immutable typed snapshot.
+**Show input files** lists original uploads, including failed reports; download an
+individual file or an investigation ZIP with the pinned template and diagnostics.
+Set **Report retention** on the template to control how long future runs keep
+originals, normalized data and output. See
 [CSV API options](docs/user/api.md#csv-input) and the
 [Python multipart example](docs/user/quickstart.md#csv-from-python).
 

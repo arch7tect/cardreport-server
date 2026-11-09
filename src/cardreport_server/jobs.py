@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from math import ceil
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
@@ -21,6 +22,8 @@ class Admission:
     template_id: str
     template_version: int
     deadline: datetime
+    retention: int
+    metadata_retention: int
 
 
 def admit(
@@ -28,7 +31,7 @@ def admit(
 ) -> Admission:
     with db.pool.connection() as conn:
         row = conn.execute(
-            "SELECT archived,latest_version,clock_timestamp() AS admitted_at "
+            "SELECT archived,latest_version,retention_seconds,clock_timestamp() AS admitted_at "
             "FROM templates WHERE id=%s",
             (template_id,),
         ).fetchone()
@@ -51,10 +54,16 @@ def admit(
         assert count is not None
         if count["n"] >= settings.backlog_limit:
             raise APIError(429, "queue_full", "Report queue is at capacity")
+        retention = row["retention_seconds"] or settings.result_retention
         return Admission(
             template_id,
             chosen,
             row["admitted_at"] + timedelta(seconds=settings.upload_timeout),
+            retention,
+            max(
+                settings.metadata_retention,
+                retention + ceil(settings.download_timeout) + 1,
+            ),
         )
 
 
@@ -93,9 +102,9 @@ def enqueue(
                 input_hash,
                 output,
                 renderer,
-                settings.input_retention,
-                settings.result_retention,
-                settings.metadata_retention,
+                admission.retention,
+                admission.retention,
+                admission.metadata_retention,
                 admission.deadline,
             ),
         ).fetchone()
@@ -188,6 +197,7 @@ def finish(
     result: dict[str, Any] | None = None,
     error: dict[str, Any] | None = None,
     data: dict[str, Any] | None = None,
+    files: list[dict[str, Any]] | None = None,
     engine_version: str,
     image_id: str,
     service_version: str,
@@ -199,7 +209,7 @@ def finish(
     with db.pool.connection() as conn:
         row = conn.execute(
             """UPDATE reports SET state=%s,terminal_state=%s,finished_at=clock_timestamp(),
-            result_key=%s,result_size=%s,result_hash=%s,data_key=%s,data_size=%s,data_hash=%s,error=%s,
+            result_key=%s,result_size=%s,result_hash=%s,data_key=%s,data_size=%s,data_hash=%s,error=%s,input_files=%s,
             input_expires_at=clock_timestamp()+input_retention*interval '1 second',
             result_expires_at=CASE WHEN %s THEN clock_timestamp()+result_retention*interval '1 second' END,
             metadata_expires_at=clock_timestamp()+metadata_retention*interval '1 second',
@@ -216,6 +226,7 @@ def finish(
                 data.get("size"),
                 data.get("hash"),
                 Jsonb(error) if error else None,
+                Jsonb(files) if files is not None else None,
                 succeeded,
                 engine_version,
                 image_id,

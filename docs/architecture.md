@@ -552,7 +552,7 @@ runs these operations in order, using database time for persisted expiry decisio
 1. Recover expired leases, using row locks and the shared retry policy.
 2. Fail queued jobs older than `QUEUE_MAX_AGE`, measured from original admission.
 3. Mark completed jobs expired when their relevant artifact lifetime ends.
-4. Delete expired input objects and eligible result objects. Result bytes survive
+4. Delete eligible expired input and result objects. Both input and result bytes survive
    an additional `DOWNLOAD_TIMEOUT` grace to allow downloads already in progress.
    Record deletion flags only after successful storage deletion.
 5. Delete expired metadata only after the associated artifacts are removed.
@@ -583,7 +583,8 @@ bounded by the library's 16 MiB ceiling, before rendering. The supervisor upload
 both artifacts to attempt-specific keys and commits their pointers in the same
 fenced transaction. A failed/stale attempt publishes neither pointer; abandoned
 objects are collected after the orphan grace. Successful snapshots share result
-expiry and deletion grace, surviving earlier raw-input collection. Migration adds
+expiry and deletion grace. New jobs use the same duration for originals and results;
+older jobs preserve their previous independent expiry schedules. Migration adds
 nullable key/size/hash metadata; old results have no snapshot.
 
 The API offers canonical JSON download and a catalog/paged display view. Bounded
@@ -593,6 +594,32 @@ precision; the canonical download retains types. No cache or data query engine i
 introduced. See [the API contract](user/api.md#csv-input) and
 [upgrade procedure](user/operations.md#file-input-and-report-data-upgrade).
 
+
+## Original files and retention policy
+
+The raw upload is the byte authority. Files are logical, ordered views of that
+object, with stable 1-based IDs, original names, size/hash, submitted CSV options
+and parse diagnostics. One shared structural extractor numbers all file parts;
+the isolated child then validates/decodes them. It stops at the first failing file,
+marking later files skipped. The supervisor validates bounded diagnostics and
+commits them under the same terminal attempt fence. No per-file storage objects,
+extra queue, reusable upload registry or new cleanup owner is needed.
+
+The API structurally extracts originals without decoding values, and serves files,
+raw body or an investigation ZIP with pinned template and execution identity.
+Malformed multipart is all-or-nothing: no partial file list, raw download available.
+These routes share bounded viewer slots through response completion, hash/size
+verification, one deadline and expiry rechecks. Raw uploads predating diagnostics
+remain readable while retained, with parsing status unknown.
+
+Template metadata has an optional retention override. Admission reads it alongside
+the chosen template, resolving the server default before upload. It snapshots equal
+input/result durations and a metadata lifetime long enough for artifacts and download
+grace. Existing finish/retry/reap/queue-expiry paths start those clocks only when
+terminal. Updating a policy never rewrites accepted jobs, templates or versions.
+Logical expiry blocks new reads immediately; both inputs and outputs get download
+grace before physical collection. Coordinated migration is additive, with no data
+backfill or expiry changes for older jobs.
 
 ## Health, observability and code map
 

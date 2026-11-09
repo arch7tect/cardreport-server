@@ -60,10 +60,15 @@ def test_upload_preview_and_download(
             "SELECT input_hash,template_version,renderer FROM reports WHERE id=%s",
             (identifier,),
         ).fetchone()
-    assert (
-        row is not None
-        and row["input_hash"] == hashlib.sha256(source.read_bytes()).hexdigest()
-    )
+    assert row is not None
+    with httpx.Client(base_url=api_url) as client:
+        base = f"/v1/reports/{identifier}"
+        assert (
+            row["input_hash"]
+            == hashlib.sha256(client.get(base + "/input").content).hexdigest()
+        )
+        assert client.get(base + "/files/1/content").content == source.read_bytes()
+        assert client.get(base + "/files").json()["files"][0]["name"] == source.name
     assert row["template_version"] == 1 and row["renderer"] == renderer
     page.get_by_role("button", name="Preview HTML", exact=True).click()
     frame = page.frame_locator('iframe[title="Report preview"]')

@@ -164,3 +164,33 @@ def test_data_migration_preserves_existing_reports(
         assert all(row["data_key"] is None for row in rows)
         with pytest.raises(CheckViolation), conn.transaction():
             conn.execute("UPDATE reports SET data_key='orphan' WHERE id=2")
+
+
+def test_retention_migration_preserves_old_policy(
+    database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from importlib import import_module
+
+    from psycopg.errors import CheckViolation
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    migration = import_module("migrations.versions.0008_input_files_retention")
+    with database.pool.connection() as conn, conn.transaction():
+        conn.execute("CREATE TEMP TABLE templates(id integer) ON COMMIT DROP")
+        conn.execute(
+            "CREATE TEMP TABLE reports(id integer,input_retention integer,result_retention integer,input_expires_at timestamptz) ON COMMIT DROP"
+        )
+        conn.execute("INSERT INTO templates VALUES (1)")
+        conn.execute(
+            "INSERT INTO reports VALUES (1,3600,86400,'2026-11-01 00:00:00+00')"
+        )
+        before = conn.execute("SELECT * FROM reports").fetchone()
+        monkeypatch.setattr(migration.op, "execute", conn.execute)
+        migration.upgrade()
+        after = conn.execute("SELECT * FROM reports").fetchone()
+        assert before and after == before | {"input_files": None}
+        assert conn.execute("SELECT retention_seconds FROM templates").fetchone() == {
+            "retention_seconds": None
+        }
+        with pytest.raises(CheckViolation), conn.transaction():
+            conn.execute("UPDATE templates SET retention_seconds=0")

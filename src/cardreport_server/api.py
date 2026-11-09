@@ -17,6 +17,7 @@ from starlette.concurrency import run_in_threadpool
 
 from .db import Database
 from .errors import APIError
+from .input_view import router as inputs_router
 from .middleware import SafeErrors
 from .openapi import install_schemas
 from .reports import router as reports_router
@@ -139,5 +140,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(templates_router)
     app.include_router(reports_router)
+    app.include_router(inputs_router)
     install_schemas(app)
     return app

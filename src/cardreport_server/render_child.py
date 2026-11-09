@@ -28,6 +28,7 @@ from cardreport import (
 )
 
 from .datasets import SNAPSHOT_LIMIT, load_datasets
+from .input_files import FileResult
 
 
 class Cancelled(BaseException):
@@ -45,12 +46,13 @@ def main() -> None:
     directory = Path(sys.argv[1])
     outcome: dict[str, object]
     stage = "bind"
+    files: list[FileResult] = []
     try:
         options = json.loads((directory / "options.json").read_text())
         template = ReportTemplate.from_json((directory / "template.json").read_bytes())
         limits = DataLimits(**options["data_limits"])
         datasets = load_datasets(
-            directory / "input", options["input_type"], template, limits
+            directory / "input", options["input_type"], template, limits, results=files
         )
         report = template.bind(datasets, limits=limits)
         stage = "snapshot"
@@ -138,6 +140,7 @@ def main() -> None:
             "id": uuid4().hex,
             "internal_type": type(error).__name__,
         }
+    (directory / "files.json").write_text(json.dumps([f.model_dump() for f in files]))
     (directory / "outcome.tmp").write_text(json.dumps(outcome))
     os.replace(directory / "outcome.tmp", directory / "outcome.json")
 

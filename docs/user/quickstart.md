@@ -135,3 +135,49 @@ Run this inside an open `httpx.Client` context. The paged view returns cell disp
 strings (or JSON null) without browser rounding. The download is the typed,
 lossless `cardreport.data/1` representation for re-use with CardReport. The snapshot
 expires with the result; reports generated before this feature have no snapshot.
+
+
+## Investigate and replay an input
+
+This also works for a failed report while its originals are retained. Download the
+bundle before expiry. Use a new local filename to avoid replacing existing evidence.
+
+```python
+import io
+import json
+import zipfile
+from pathlib import Path
+
+import httpx
+
+with httpx.Client(base_url="http://127.0.0.1:18000", timeout=120) as client:
+    files = client.get(f"/v1/reports/{job['id']}/files")
+    files.raise_for_status()
+    print(files.json())
+    saved = client.get(f"/v1/reports/{job['id']}/inputs.zip")
+    saved.raise_for_status()
+    with Path(f"{job['id']}-inputs.zip").open("xb") as target:
+        target.write(saved.content)
+    with zipfile.ZipFile(io.BytesIO(saved.content)) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+        original = archive.read("input.raw")
+    # Deliberate new job, using the existing pinned template on this server.
+    replay = client.post(
+        "/v1/reports",
+        params={
+            "template_id": manifest["template_id"],
+            "template_version": manifest["template_version"],
+            "renderer": manifest["renderer"],
+            "output": manifest["output"],
+        },
+        headers={"Content-Type": manifest["input"]["content_type"]},
+        content=original,
+    )
+    replay.raise_for_status()
+    print(replay.json())
+```
+
+An invalid original normally reproduces the validation failure. Service/library
+versions and operator limits can change between runs. For another installation,
+register the archive's `template.json` first and use its returned ID/version.
+The archive contains source data: share it only with intended investigators.

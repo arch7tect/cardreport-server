@@ -15,7 +15,7 @@ allow access only from trusted callers. All permitted callers can mutate templat
 | GET /v1/templates/{id} | Metadata and latest version |
 | GET /v1/templates/{id}/versions | Version metadata; `after` version and `limit` |
 | GET /v1/templates/{id}/versions/{version} | Metadata plus canonical `definition` |
-| PATCH /v1/templates/{id} | `{"archived": true}` or false |
+| PATCH /v1/templates/{id} | Update `archived` and/or nullable `retention_seconds` |
 
 IDs match `[a-z0-9][a-z0-9_-]{0,63}`. The POST body is an existing
 `cardreport.template/1` envelope, with `Content-Type: application/json` or
@@ -117,7 +117,7 @@ not filters, and survive removal of the boundary row. Clear the cursor when
 changing filters to start from the newest match. Pagination is a live view:
 concurrent commits, state changes or retention are not a frozen snapshot. Refresh
 the first page for new jobs. `expired` includes formerly failed and succeeded jobs;
-`terminal_state` distinguishes them. History has no total count or input-read API.
+`terminal_state` distinguishes them. History has no total count.
 
 ## Renderer selection
 
@@ -224,8 +224,7 @@ change the snapshot. Failed reports and older reports have no saved snapshot.
   `name`, `columns`, `row_count`, `offset` and `rows` (arrays of cells).
 
 Paged cells are display strings, except null which remains JSON null. Integers and
-decimals retain exact digits; dates/datetimes use ISO format including offsets,
-booleans use `true`/`false`. Download `/data` for typed data instead of display strings.
+decimals retain exact digits; dates/datetimes use ISO format including offsets. Download `/data` for typed data instead of display strings.
 `name` is an exact query value, including Unicode or slashes; it is not a storage path.
 `offset` is nonnegative; `limit` is 1–100, default 100. Beyond the last row returns
 an empty page. Dataset names/row counts let the console select and page without
@@ -238,7 +237,75 @@ unknown dataset. Successful views/downloads use `Cache-Control: no-store`. Each 
 bounded, size/hash-verified snapshot; per-API `CARDREPORT_DATA_VIEW_SLOTS` (default 2)
 limits concurrent views. Busy views return 503 with Retry-After. Corrupt snapshots
 return 503 `data_integrity`; a view exceeding its read budget returns 504 `data_timeout`. There is no cache,
-search, data editing, failed-input viewer or automatic rerun.
+search, data editing or automatic rerun. Original failed inputs are available separately below.
 
-Snapshots survive raw input collection and expire with the result. Coordinated
+For newly accepted jobs, snapshots, originals and output share the same retention.
+Older jobs retain their original independent expiry schedules. Coordinated
 upgrade and migration are required; see [operations](operations.md#file-input-and-report-data-upgrade).
+
+
+## Original input files and investigation
+
+A **file** is an original upload; a **dataset** is a typed table decoded from it.
+A CSV supplies one dataset. A JSON/YAML bundle may supply several. These endpoints
+serve accepted input even while queued/running or after a terminal failure:
+
+| Method/path | Result |
+| --- | --- |
+| GET /v1/reports/{id}/files | Structural catalog: file ID/name/part/format/size/SHA-256, parsing status, dataset names and submitted CSV fields |
+| GET /v1/reports/{id}/files/{index}/content | Exact original file bytes as an attachment |
+| GET /v1/reports/{id}/input | Exact HTTP request body, before parsing, as an attachment |
+| GET /v1/reports/{id}/inputs.zip | Investigation archive with originals, request body, pinned template and manifest |
+
+The file ID is its 1-based position among file parts in wire order, regardless of
+field name or validity. Duplicate filenames remain distinct. Raw JSON/YAML requests
+have one synthetic `input.json`/`input.yaml` name; a raw body has no original filename.
+The console always uses multipart for file uploads, preserving submitted names.
+Downloads use safe generated filenames; the catalog and manifest retain original names.
+
+Parsing statuses: `parsed`, `failed`, `skipped` (after an earlier error), or `unknown`
+(no committed diagnostics, including older reports, queued jobs and worker crashes).
+`parsed` does not imply successful binding/rendering. File errors are safe codes
+`invalid_file` or `duplicate_dataset`; full cell contents are never included in errors.
+Global option, binding and render failures remain in the report error. CSV fields
+are ordered name/value pairs, preserving repeated null tokens and invalid options.
+Structural filenames, field names and option values have a combined 64 KiB metadata
+cap to bound catalog/archive expansion. Exceeding it or malformed/truncated multipart returns `structure: "invalid"`, an empty file list,
+and remains downloadable through `/input` and the archive. No partial extraction.
+
+The ZIP contains `input.raw`, `template.json`, `manifest.json`, and `files/1`,
+`files/2`, etc. Generated archive paths avoid traversal and duplicate-name collisions.
+The manifest maps IDs to original names, includes the normalized request Content-Type
+(with multipart boundary), CSV options, output/renderer, template version, safe error
+and recorded engine/service/image versions. Raw bytes preserve comments, encoding,
+line endings and CSV quoting. No API credentials, storage keys or internal traces
+are included. It is an investigation bundle, not an executable project or a promise
+of identical rendering on different versions/configurations. See the
+[replay example](quickstart.md#investigate-and-replay-an-input).
+
+All endpoints verify the stored size/hash, recheck expiry before responding and use
+no-store/nosniff. Missing report/file returns 404; expired/deleted input returns 410
+`input_expired`. Corruption returns 503 `input_integrity`; exceeded read budget 504
+`input_timeout`. Reads share `DATA_VIEW_SLOTS` with normalized-data views (busy: 503).
+Original uploads are immutable and are not a separately reusable file repository.
+
+## Template retention
+
+`PATCH /v1/templates/monthly` with `{"retention_seconds": 604800}` sets seven days;
+`{"retention_seconds": null}` inherits `CARDREPORT_RESULT_RETENTION` (default 86400).
+Omitted fields remain unchanged. An empty patch, null `archived`, booleans/fractions
+for retention, or nonpositive retention return 422. The maximum 2147483000 seconds
+reserves room for download grace within the database integer representation.
+GET/PATCH template metadata includes `retention_seconds` (override or null) and
+`effective_retention_seconds`. Retention belongs to the template's service metadata,
+not a version's CardReport layout definition, so changing it creates no new version.
+
+Admission captures the effective duration before the upload. It applies to that run's
+original request/files, normalized snapshot and output, starting at terminal success
+or failure; retries do not restart an already-terminal clock. Changes affect future
+admissions only. Status/history expose `retention_seconds`, `input_expires_at` and
+`inputs_available` as well as the existing result expiry and snapshot availability.
+Queued/running input has no expiry yet; queue-age and attempt limits still apply.
+Templates and their immutable versions are not deleted by report retention.
+Metadata lasts at least the configured metadata duration and longer than artifacts
+plus download grace; it can retain file names/parse results after bytes expire.

@@ -26,6 +26,13 @@ already accepted jobs. Restore enables new work. Concurrent changes are resolved
 by the server. Unsaved source stays only in page memory; navigation warns before
 discarding it. A reload or closed tab does not provide durable draft storage.
 
+The template detail's **Report retention** sets seconds for future runs, starting
+at completion. Leave empty to inherit the server default; the effective duration is
+shown in seconds and days. This setting applies to originals, normalized data and
+output, creates no new template version, and does not change existing runs. Save
+explicitly; navigation warns about unsaved edits. Report details show the captured
+duration and input expiry. Templates themselves do not expire.
+
 Service status checks API liveness and database/storage readiness on demand. It
 does not assert worker health. OpenAPI, Swagger and raw metrics have direct links.
 
@@ -81,6 +88,15 @@ detail is polled. Polling pauses in hidden tabs and stops on navigation or termi
 state; temporary read errors back off and mark the displayed status stale. Refresh
 status is always available. Health/readiness and report success are separate checks.
 
+**Show input files** lists exact original uploads, their sizes, SHA-256 hashes,
+parse results and supplied datasets. It works for pending and failed reports too.
+Download one original file or **Download investigation ZIP** for the originals,
+pinned template and diagnostics. **Download original request** also works when
+multipart is damaged and cannot be split into files. Unknown parsing status means
+no completed diagnostics were saved, not that parsing succeeded. Hide/reopen the
+panel to refresh it after a running job finishes. Downloads expire with the run's
+retention; old jobs keep their earlier expiry schedules.
+
 **Show data** opens the immutable datasets saved with this successful report.
 Select a dataset to see columns and up to 100 rows, then use Previous/Next rows.
 The viewer preserves exact numeric values and escapes text; null appears as `∅`.
@@ -109,7 +125,7 @@ a safe JSON error; use Refresh status. The endpoint remains the final authority
 on whether a result is downloadable. Failed/pending results have no partial output.
 
 Use these settings prefills a new submission form; you must select or paste data
-again. Stored inputs cannot be read through the API. There is no cancellation or
+again. Original inputs can be downloaded from report details. There is no cancellation or
 server-side rerun action. Drafts/data are never stored in browser localStorage or
 sessionStorage, and the console does not add authentication or per-user visibility.
 
@@ -120,10 +136,12 @@ sessionStorage, and the console does not add authentication or per-user visibili
 | List/filter templates and list versions | Templates, version selector, Load more |
 | Get template/version definition | Template detail; canonical JSON copy/download |
 | Create immutable version | Create template / Create new version |
-| Archive and restore | Template detail |
+| Archive, restore and retention | Template detail |
 | Submit report with data/renderer/output/version | New report |
 | List retained jobs and filter | Reports |
 | Get status/attempts/error/versions | Report detail |
+| Original files, parsing diagnostics and investigation ZIP | Report detail, Show input files |
+| Normalized datasets and JSON download | Report detail, Show data |
 | Get result content | Download; collapsible HTML preview with scaling; Open HTML/PDF in a new tab |
 | Liveness and readiness | Service status |
 | Swagger, OpenAPI, raw metrics | Navigation/footer links |

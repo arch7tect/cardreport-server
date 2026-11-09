@@ -205,6 +205,9 @@ def test_csv_report(integration_settings: Settings, renderer: str, mixed: bool) 
         job = response.json()
         status = wait(client, job["status_url"])
         assert status["state"] == "succeeded", status
+        catalog = client.get(job["status_url"] + "/files").json()
+        assert all(f["status"] == "parsed" and f["datasets"] for f in catalog["files"])
+        assert len(catalog["files"]) == len(parts)
         pdf = PdfReader(io.BytesIO(client.get(job["content_url"]).content))
         text = "\n".join(page.extract_text() for page in pdf.pages)
         assert "21" in text and "Call attempted" in text
@@ -227,3 +230,14 @@ def test_csv_report(integration_settings: Settings, renderer: str, mixed: bool) 
             failed = wait(client, bad["status_url"])
             assert failed["state"] == "failed" and failed["attempts"] == 1
             assert failed["error"]["code"] == "invalid_data"  # type: ignore[index]
+            assert client.get(bad["status_url"] + "/input").content == content
+            files = client.get(bad["status_url"] + "/files").json()
+            if content == b"broken":
+                assert files["structure"] == "invalid" and files["files"] == []
+            else:
+                assert files["files"][0]["status"] == "failed"
+                assert files["files"][0]["error"] == "invalid_file"
+                assert (
+                    client.get(bad["status_url"] + "/files/1/content").content
+                    == b"clients\nprivate-marker\n"
+                )

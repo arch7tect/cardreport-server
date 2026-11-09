@@ -58,7 +58,9 @@ def test_compose_settings_defaults_and_overrides(tmp_path: Path) -> None:
             }
         )
         assert set(
-            "CARDREPORT_" + name.upper() for name in Settings.model_fields
+            "CARDREPORT_" + name.upper()
+            for name in Settings.model_fields
+            if name != "input_retention"
         ) <= set(services[service]["environment"])
         for name, field in Settings.model_fields.items():
             if not field.is_required():

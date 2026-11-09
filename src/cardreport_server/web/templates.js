@@ -40,6 +40,22 @@ export async function templateDetail(root, ctx, id, chosen = null) {
     } catch (error) { if (ctx.active) message(status, mutationError(error), 'error'); }
     finally { archive.disabled = false; }
   });
+  const retention = el('input', {type:'number', min:1, max:2147483000, step:1, value:metadata.retention_seconds ?? '', placeholder:'Use server default'});
+  const policyStatus = notice();
+  const policyHint = el('p', {class:'muted'});
+  function policyInfo() { policyHint.textContent = `Effective retention: ${metadata.effective_retention_seconds} seconds (${(metadata.effective_retention_seconds / 86400).toFixed(2)} days). Applies to future reports only, from completion. Original files, normalized data and output expire together.`; }
+  policyInfo();
+  const savePolicy = el('button', {type:'submit'}, 'Save retention');
+  const policyForm = el('form', {}, el('div', {class:'toolbar'}, field('Retention (seconds)', retention, 'Leave empty to inherit the server default.'), savePolicy), policyHint, policyStatus);
+  policyForm.addEventListener('input', () => { ctx.dirty = true; });
+  policyForm.addEventListener('submit', async event => {
+    event.preventDefault(); savePolicy.disabled = true; retention.disabled = true;
+    try {
+      const updated = await api(`/v1/templates/${encodeURIComponent(id)}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({retention_seconds:retention.value === '' ? null : Number(retention.value)})});
+      if (ctx.active) { Object.assign(metadata, updated); ctx.dirty = false; policyInfo(); message(policyStatus, 'Retention saved for future reports.', 'success'); }
+    } catch (error) { if (ctx.active) message(policyStatus, mutationError(error), 'error'); }
+    finally { savePolicy.disabled = false; retention.disabled = false; }
+  });
   function renderActions() {
     actions.replaceChildren(badge(metadata.archived ? 'archived' : 'active'));
     if (!metadata.archived && current) actions.append(link('New report', `#/new-report?template=${encodeURIComponent(id)}&version=${version.value}`, true), link('Create new version', `#/templates/${encodeURIComponent(id)}/edit?version=${version.value}`));
@@ -69,7 +85,7 @@ export async function templateDetail(root, ctx, id, chosen = null) {
   }
   if (!ctx.active) return;
   root.replaceChildren(link('← Templates', '#/templates'), heading(id, 'Immutable versions. Editing always creates a new version.'), status,
-    el('div', {class:'panel'}, actions), el('div', {class:'grid'},
+    el('div', {class:'panel'}, actions), el('section', {class:'panel'}, el('h2', {}, 'Report retention'), policyForm), el('div', {class:'grid'},
       el('section', {class:'panel'}, el('div', {class:'toolbar'}, field('Version', version), more), definition,
         el('div', {class:'actions'}, button('Copy JSON', () => copy(definition.textContent, status)), button('Download JSON', () => {if (current) saveText(`${id}-v${current.version}.json`, definition.textContent);}))),
       el('aside', {class:'panel'}, el('h2', {}, 'Version details'), info, el('hr', {class:'divider'}), el('p', {class:'muted'}, 'Stored definitions are canonical JSON. Original YAML comments and formatting are not retained.'))));
