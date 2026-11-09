@@ -20,14 +20,14 @@ export CARDREPORT_SERVER_IMAGE=ghcr.io/arch7tect/cardreport-server:0.1.0
 export CARDREPORT_IMAGE_ID="$CARDREPORT_SERVER_IMAGE"
 docker compose --profile app pull migrate api worker
 docker compose up -d --wait postgres s3
-docker compose --profile app run --rm --no-build migrate
+docker compose --profile app run --rm --pull never migrate
 docker compose --profile app up -d --no-build --wait api worker
 ```
 
 Open `http://127.0.0.1:18000/ui/`. You can persist both image settings in `.env`.
 Use the same selected image for migrations, API and workers. `pull` downloads the
-published image; `--no-build` prevents a missing image being replaced by a local
-build under a release name. Stop if `pull` reports a warning or failure. For source development, leave `CARDREPORT_SERVER_IMAGE`
+published image; migration uses that pre-pulled image and `up --no-build` prevents
+a missing application image being replaced by a local build under a release name. Stop if `pull` reports a warning or failure. For source development, leave `CARDREPORT_SERVER_IMAGE`
 unset and follow the [development setup](user/local-development.md).
 
 For production, pin `ghcr.io/arch7tect/cardreport-server@sha256:...` from the
@@ -83,10 +83,11 @@ partial release, so deployments must pin their chosen digest. A full rerun may
 rebuild and update staging tags; `images.json` describes the preserved version
 manifest, not those staging tags.
 
-GHCR initially creates a private package even for a public repository. After the
-first push, an administrator must open the package settings, change visibility to
-**Public**, and verify an anonymous pull. Repository linkage comes from the OCI
-source label. This is a one-time setup for the package, not a step on every release.
+Check package visibility after the first push: GHCR may create a private package
+even for a public repository. If needed, an administrator changes it to **Public**
+in package settings. Always verify an anonymous pull. The 0.1.0 package was already
+public when verified. Repository linkage comes from the OCI source label; the
+visibility check is an initial setup step, not a change on every release.
 See [GitHub's registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
 After publication, pull the digest from `images.json` on each supported platform
