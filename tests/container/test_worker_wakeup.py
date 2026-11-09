@@ -32,8 +32,7 @@ worker.db.close=lambda: None
 worker.storage.check=lambda: None
 jobs.reap=lambda *args: 0
 jobs.heartbeat=lambda db,settings,attempts: {a.token for a in attempts}
-maintenance.maintain=lambda *args: None
-maintenance.OrphanSweep.run=lambda *args: None
+maintenance.cleanup=lambda *args: None
 attempts=[SimpleNamespace(token=uuid4(),index=i) for i in range(3)]
 queued=iter(attempts)
 claims=[]

@@ -11,7 +11,10 @@ same API from Python or any HTTP client.
 Templates and data are separate. Register a JSON/YAML template once, then submit
 its ID/version and named datasets as JSON, YAML or CSV files. PostgreSQL holds metadata
 and the queue; S3 holds inputs/results. Replaceable workers run bounded concurrent
-attempts and scale independently from the FastAPI application.
+attempts and scale independently from the FastAPI application. Workers coordinate
+retention cleanup through PostgreSQL; no separate cleanup service is needed. See
+[cleanup coordination](docs/user/operations.md#cleanup-coordination) for connection
+budgeting and deployment requirements.
 
 PDF and HTML support `renderer=chromium` (default) and `renderer=weasyprint`.
 Both engines are included in the worker image. Chromium supports dashboard and
@@ -26,7 +29,7 @@ authentication: deploy only on a trusted internal network.
 
 ## Run a released image
 
-Use `ghcr.io/arch7tect/cardreport-server:0.4.0` for API, workers and migrations.
+Use `ghcr.io/arch7tect/cardreport-server:0.4.1` for API, workers and migrations.
 The [installation guide](docs/releases.md#install-a-released-image) starts the full
 stack from the published image, without building it locally. For existing services,
 follow the coordinated upgrade procedure before changing images.

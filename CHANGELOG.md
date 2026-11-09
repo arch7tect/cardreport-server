@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1
+
+- Coordinate retention and orphan cleanup across workers with a PostgreSQL advisory
+  lock, while keeping expired-lease recovery independent. Busy workers skip cleanup
+  without waiting; failures close the dedicated lock connection.
+- Document connection budgeting, session-pooling requirements and network-loss
+  recovery. Retention durations and existing expiry timestamps are unchanged.
+
+No database migration is required. Replace all workers to enable coordination;
+older workers do not honor the cleanup lock.
+
 ## 0.4.0
 
 - Search templates by ID or the latest report title, with case-insensitive literal

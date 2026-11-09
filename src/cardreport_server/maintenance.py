@@ -12,6 +12,26 @@ from .db import Database
 from .settings import Settings
 from .storage import Storage
 
+# CRPT / cleanup: database-scoped, stable across releases.
+CLEANUP_LOCK = (0x43525054, 1)
+
+
+def cleanup(
+    db: Database, storage: Storage, settings: Settings, sweep: "OrphanSweep"
+) -> bool:
+    # Autocommit avoids a long transaction during S3 I/O; closing releases the lock.
+    # A dedicated session leaves the pool available even with DB_POOL_SIZE=1.
+    with db.dedicated_connection() as conn:
+        row = conn.execute(
+            "SELECT pg_try_advisory_lock(%s, %s) AS acquired", CLEANUP_LOCK
+        ).fetchone()
+        assert row is not None
+        if not row["acquired"]:
+            return False
+        maintain(db, storage, settings)
+        sweep.run(db, storage, settings)
+        return True
+
 
 def maintain(db: Database, storage: Storage, settings: Settings) -> None:
     with db.pool.connection() as conn:

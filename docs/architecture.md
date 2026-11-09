@@ -157,7 +157,9 @@ cross-replica semaphore: concurrent admissions can overshoot it. Per-request
 input, output and dataset limits remain unchanged by replica count.
 
 Each API/worker process has its own pool capped by `DB_POOL_SIZE`. Budget database
-connections across all replicas, migrations and operational clients. More workers
+connections across all replicas, migrations and operational clients. Each worker
+may also open one short-lived dedicated connection while attempting cleanup; it
+is outside that pool so a one-slot pool remains usable. More workers
 also add heartbeat and maintenance traffic; more uploads and completions increase
 S3 and network load. HPA cannot fix a saturated shared database or object store.
 
@@ -546,29 +548,49 @@ unfinished work to be retried.
 
 ## Maintenance and retention
 
-Each non-draining worker schedules at most one maintenance task at a time. A task
-runs these operations in order, using database time for persisted expiry decisions:
+Each non-draining worker schedules at most one maintenance task at a time.
+Lease recovery runs first on every worker, using row locks and the shared retry
+policy. It does not depend on the cleanup lock or on another worker's S3 progress.
 
-1. Recover expired leases, using row locks and the shared retry policy.
-2. Fail queued jobs older than `QUEUE_MAX_AGE`, measured from original admission.
-3. Mark completed jobs expired when their relevant artifact lifetime ends.
-4. Delete eligible expired input and result objects. Both input and result bytes survive
-   an additional `DOWNLOAD_TIMEOUT` grace to allow downloads already in progress.
-   Record deletion flags only after successful storage deletion.
-5. Delete expired metadata only after the associated artifacts are removed.
-6. Scan one S3 page for orphan inputs/results. Ignore objects younger than
-   `ORPHAN_GRACE` and delete only objects with no input/result reference in the DB.
+The remaining cleanup cycle requires PostgreSQL session advisory lock
+`(0x43525054, 1)` (CRPT / cleanup). `pg_try_advisory_lock` does not wait: a busy
+worker skips cleanup until its next maintenance tick. The holder runs these steps,
+using database time for persisted expiry decisions:
+
+1. Fail queued jobs older than `QUEUE_MAX_AGE`, measured from original admission.
+2. Mark completed jobs expired when their relevant artifact lifetime ends.
+3. Delete eligible expired inputs, normalized snapshots and result objects. Both
+   inputs and results survive an additional `DOWNLOAD_TIMEOUT` grace for downloads
+   already in progress. Record deletion flags only after successful storage deletion.
+4. Delete expired metadata only after the associated artifacts are removed.
+5. Scan one S3 page for orphan inputs/results. Ignore objects younger than
+   `ORPHAN_GRACE` and delete only objects with no input/result/data reference in the DB.
+
+The lock uses a dedicated autocommit connection: no pooled slot is reserved and no
+long transaction is held during S3 I/O. Closing that connection releases the lock
+on success or exception. Failure to connect/acquire never falls back to unlocked
+cleanup. The key is shared across the database (including different search paths);
+other applications must not reuse it. Direct PostgreSQL or session pooling is
+required; transaction pooling is incompatible with this session lock.
+
+Only one cleanup session holds the lock at a time; there is no permanent leader or
+global schedule. Staggered worker ticks can run successive cycles. The orphan cursor
+stays local to each worker and resets on an invalid continuation token. Replacement
+or changes in the winning worker may repeat scans, so no exactly-once scan is promised.
+
+If PostgreSQL loses the holder's session, another worker can acquire the lock.
+Already in-flight S3 operations in the old worker may still complete: the lock
+reduces concurrent duplicate work, not fences external storage. Deletion and flag
+updates remain safe to repeat. A silent network partition delays release until
+PostgreSQL detects it; configure server-side TCP keepalives as described in
+[operations](user/operations.md#cleanup-coordination). No fixed failover time is promised.
 
 `MAINTENANCE_BATCH_SIZE` bounds lease recovery, queued expiry, artifact/metadata
 cleanup selections and the orphan page size. The state-only completed-job expiry
-update is not batch-limited. The orphan cursor is local and can restart after
-worker replacement. Orphan age compares S3 `LastModified` with database time,
+update is not batch-limited. Orphan age compares S3 `LastModified` with database time,
 so that grace depends on sufficiently aligned storage/database clocks. Ownership
-checks do not use this cross-clock comparison. Templates are not deleted by this
-maintenance path.
-
-Failures are retried in later maintenance cycles. Healthy workers can recover
-jobs left by failed workers; no separate recovery service is required.
+checks do not use this cross-clock comparison. Templates are not deleted here.
+Failures are retried in later maintenance cycles; no separate cleanup service is required.
 
 
 ## File transport and report data

@@ -13,20 +13,30 @@ SCHEMA_REVISION = "0008"
 
 class Database:
     def __init__(self, settings: Settings) -> None:
+        self._conninfo = settings.database_url.get_secret_value()
+        self._connection_options: dict[str, Any] = {
+            "connect_timeout": settings.db_connect_timeout,
+            "options": (
+                f"-c statement_timeout={max(1, int(settings.db_statement_timeout * 1000))} "
+                f"-c lock_timeout={max(1, int(settings.db_lock_timeout * 1000))}"
+            ),
+        }
         self.pool: ConnectionPool[Connection[dict[str, Any]]] = ConnectionPool(
-            settings.database_url.get_secret_value(),
+            self._conninfo,
             min_size=0,
             max_size=settings.db_pool_size,
             timeout=settings.io_timeout,
-            kwargs={
-                "row_factory": dict_row,
-                "connect_timeout": settings.db_connect_timeout,
-                "options": (
-                    f"-c statement_timeout={max(1, int(settings.db_statement_timeout * 1000))} "
-                    f"-c lock_timeout={max(1, int(settings.db_lock_timeout * 1000))}"
-                ),
-            },
+            kwargs={"row_factory": dict_row, **self._connection_options},
             open=False,
+        )
+
+    def dedicated_connection(self) -> Connection[dict[str, Any]]:
+        """Unpooled session; the caller must close it, including on failure."""
+        return Connection.connect(
+            self._conninfo,
+            row_factory=dict_row,
+            autocommit=True,
+            **self._connection_options,
         )
 
     def open(self) -> None:

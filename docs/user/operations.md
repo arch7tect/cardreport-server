@@ -37,7 +37,7 @@ Other required settings: `S3_ENDPOINT`, `S3_BUCKET`. `S3_PREFIX` defaults to
 | METADATA_RETENTION | 604800 | Seconds after completion |
 | DOWNLOAD_TIMEOUT | 120 | Download deadline; also physical deletion grace |
 | ORPHAN_GRACE | 900 | Minimum age before collecting unreferenced objects |
-| MAINTENANCE_INTERVAL | 30 | Per-worker cleanup/reaper interval |
+| MAINTENANCE_INTERVAL | 30 | Per-worker maintenance attempt interval; busy cleanup lock skips deletion |
 | ADMISSION_ENABLED | true | Pause new reports and template mutations |
 | MAINTENANCE_BATCH_SIZE | 100 | Rows per bounded cleanup/reaper query and objects per orphan page |
 | IO_TIMEOUT | 5 | S3 connect/read and database pool acquisition seconds |
@@ -161,6 +161,48 @@ to outlast its artifacts and download grace. Failed deletion is retried; metadat
 objects are gone. Orphan sweeps inspect one prefix page per tick and check database
 references. Keep the prefix exclusive; do not upload user files into it. There is
 no public delete, cancellation or arbitrary remote-data-fetch API.
+
+### Cleanup coordination
+
+Each worker recovers expired leases independently, then tries a shared PostgreSQL
+advisory lock for retention cleanup and one orphan scan page. A busy lock skips
+cleanup without waiting; it does not pause report processing. Only one cleanup
+session holds the lock at a time. Different workers can run consecutive cycles;
+this is not a fixed global cleanup rate or a permanent leader.
+
+Budget **one extra temporary DB connection per worker**, beyond `DB_POOL_SIZE`.
+The dedicated autocommit connection closes after each cycle, including on errors.
+It never returns a session lock to the connection pool. Use direct PostgreSQL or
+session pooling; transaction pooling (for example PgBouncer transaction mode) is
+not supported for workers. Session poolers must reset server sessions, including
+advisory locks, when a client disconnects. The lock key `(0x43525054, 1)` is reserved for this
+service across the whole database, including other search paths.
+
+Normal disconnect or backend termination releases the lock. A silent network
+partition may leave it held until PostgreSQL detects the lost client. Configure
+**server-side** TCP keepalives for your infrastructure; client-side keepalives alone
+do not make the server detect a vanished worker. For example, a database
+administrator can configure the worker's login role (replace `cardreport` if needed):
+
+```sql
+ALTER ROLE cardreport SET tcp_keepalives_idle = 30;
+ALTER ROLE cardreport SET tcp_keepalives_interval = 10;
+ALTER ROLE cardreport SET tcp_keepalives_count = 3;
+```
+
+These example values apply to new PostgreSQL sessions and are operator settings,
+not application defaults. Choose them for your network and any connection proxy;
+they are ignored for Unix-domain sockets. With a session pooler, PostgreSQL checks
+its link to that pooler; configure the pooler to detect vanished worker clients too.
+An idle-session or proxy idle timeout shorter than a cleanup cycle can drop the
+lock mid-cycle and allow overlapping cleanup. Choose those limits accordingly. See
+[PostgreSQL TCP settings](https://www.postgresql.org/docs/current/runtime-config-connection.html#RUNTIME-CONFIG-CONNECTION-SETTINGS-TCP).
+No exact recovery deadline is guaranteed. After connection loss, an old in-flight
+S3 delete can still finish while a new holder runs; cleanup remains safe to repeat.
+
+Upgrading to coordinated cleanup requires replacing all old workers: they do not
+honor the new lock. No database migration is needed; follow the existing graceful
+upgrade procedure. Retention settings and expiry timestamps remain unchanged.
 
 ## Observability
 

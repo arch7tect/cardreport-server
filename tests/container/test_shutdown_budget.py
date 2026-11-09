@@ -28,15 +28,14 @@ worker.db.close=lambda: None
 worker.storage.check=lambda: None
 jobs.claim=lambda *args: None
 jobs.reap=lambda *args: 0
-maintenance.OrphanSweep.run=lambda *args: None
 def blocked(*args):
  worker.stop()
  time.sleep(30)
-maintenance.maintain=blocked
+maintenance.cleanup=blocked
 if STAGE == 'attempt_io':
  from types import SimpleNamespace
  from uuid import uuid4
- maintenance.maintain=lambda *args: None
+ maintenance.cleanup=lambda *args: None
  claimed=iter([SimpleNamespace(token=uuid4()),None])
  jobs.claim=lambda *args: next(claimed,None)
  worker.execute=blocked

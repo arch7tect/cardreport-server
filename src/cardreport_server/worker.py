@@ -356,14 +356,13 @@ class Worker:
         next_heartbeat = 0.0
         next_maintenance = 0.0
         stop_deadline: float | None = None
-        from .maintenance import OrphanSweep, maintain
+        from .maintenance import OrphanSweep, cleanup
 
         sweep = OrphanSweep()
 
         def maintenance() -> None:
             jobs.reap(self.db, self.settings)
-            maintain(self.db, self.storage, self.settings)
-            sweep.run(self.db, self.storage, self.settings)
+            cleanup(self.db, self.storage, self.settings, sweep)
 
         maintenance_future: Future[None] | None = None
         with ThreadPoolExecutor(
