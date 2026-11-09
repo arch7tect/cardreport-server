@@ -59,3 +59,21 @@ Final local candidate: 147 unit, 48 PostgreSQL/S3 integration, 26 container and
 133 local documentation links/fixtures/deployment YAML and an installed-wheel
 check outside the source checkout passed. The documented investigation ZIP and
 exact-request replay example ran successfully against an isolated installation.
+
+
+## Publication verification
+
+Release [v0.3.0](https://github.com/arch7tect/cardreport-server/releases/tag/v0.3.0)
+points to 4978415dd9e1b85f9172c53879544f73eb903899. The
+[release pipeline](https://github.com/arch7tect/cardreport-server/actions/runs/42633853179)
+passed all 260 cases on each native Linux architecture, amd64 and arm64.
+The versioned GHCR tag and latest have the same multi-platform digest:
+`sha256:a558ae427a9f55c00fda0c714a8b676290f09c47fc3e33a007fb8e5c917fa123`.
+
+Anonymous pull and a fresh installation from that published digest passed explicit
+migration, console readiness, mixed-input PDF/HTML generation on both renderers,
+original-byte and archive checks, failed CSV inspection and retention capture.
+The local development upgrade preserved all pre-existing template/report rows.
+The published image and release asset agree on source commit and version. This
+post-release documentation update clarifies that the file catalog depends on the
+retained raw upload, while dataset names/parse results persist in report metadata.

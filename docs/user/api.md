@@ -308,4 +308,6 @@ admissions only. Status/history expose `retention_seconds`, `input_expires_at` a
 Queued/running input has no expiry yet; queue-age and attempt limits still apply.
 Templates and their immutable versions are not deleted by report retention.
 Metadata lasts at least the configured metadata duration and longer than artifacts
-plus download grace; it can retain file names/parse results after bytes expire.
+plus download grace. The database retains dataset names and parse results after
+bytes expire; the original-file catalog itself requires the retained upload and
+returns 410 after input expiry.
