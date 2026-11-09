@@ -36,6 +36,7 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     env:
+      BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
       BUILD_VERSION: ${{ needs.plan.outputs.version }}
       SOURCE_REVISION: ${{ github.sha }}
     steps:

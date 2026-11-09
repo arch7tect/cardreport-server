@@ -34,7 +34,6 @@ services:
     profiles: ["app"]
     build:
       context: .
-      provenance: false
       args:
         BUILD_VERSION: ${BUILD_VERSION:-development}
         SOURCE_REVISION: ${SOURCE_REVISION:-development}
@@ -94,7 +93,6 @@ services:
     profiles: ["app"]
     build:
       context: .
-      provenance: false
       args:
         BUILD_VERSION: ${BUILD_VERSION:-development}
         SOURCE_REVISION: ${SOURCE_REVISION:-development}
@@ -118,7 +116,6 @@ services:
     profiles: ["app"]
     build:
       context: .
-      provenance: false
       args:
         BUILD_VERSION: ${BUILD_VERSION:-development}
         SOURCE_REVISION: ${SOURCE_REVISION:-development}
