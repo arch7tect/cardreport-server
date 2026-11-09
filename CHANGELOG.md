@@ -7,6 +7,8 @@
 - Filter report history by creation date and time, with timezone-aware boundaries.
 - Browse templates and reports in pages of 50 with Previous / Next, preserving
   filters and the current page when a page request fails.
+- Preserve form focus when background page loading finishes, so typing and clearing
+  retention settings are not interrupted.
 
 ## 0.3.0
 

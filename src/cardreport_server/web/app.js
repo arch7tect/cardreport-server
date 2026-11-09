@@ -34,7 +34,7 @@ async function route() {
     else if (parts[0] === 'reports') await reports(main, context);
     else if (parts[0] === 'status') await serviceStatus(main, context);
     else main.replaceChildren(heading('Page not found', 'Choose a page from the navigation.'));
-    if (context.active) main.focus({preventScroll: true});
+    if (context.active && !main.contains(document.activeElement)) main.focus({preventScroll: true});
   } catch (error) {
     if (!context.active) return;
     const status = notice(); main.replaceChildren(heading('Unable to load this page', 'Your server may be unavailable.'), status, button('Try again', route));
