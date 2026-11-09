@@ -151,65 +151,94 @@ See the
 
 ## CSV input
 
-`POST /v1/reports` also accepts `multipart/form-data`. Query parameters, admission,
-202 semantics, retries, retention, status and download are identical to JSON/YAML.
-Template registration still accepts only JSON/YAML. A raw `text/csv` body is not
-supported because a report can require several named datasets.
+`POST /v1/reports` accepts `multipart/form-data` with **any combination of multiple
+JSON, YAML and CSV files**. CSV is optional. Query parameters, admission, 202
+semantics and retries are the same as raw JSON/YAML. Template registration remains
+separate. A raw `text/csv` body is unsupported because a report may need several datasets.
 
 | Part | Meaning |
 | --- | --- |
-| `files` (repeat, required) | CSV files with a header; basename without `.csv` names a declared template dataset |
-| `data` (one, optional) | Existing `cardreport.data/1` bundle; filename must end in `.json`, `.yaml` or `.yml` |
-| `csv_encoding` | Python text encoding used by CardReport; default `utf-8`; use `utf-8-sig` for BOM files |
+| `files` (repeat, required, at most 32) | `.json`, `.yaml`, `.yml` bundles or `.csv` files |
+| `csv_encoding` | Python text encoding; default `utf-8`; use `utf-8-sig` for BOM files |
 | `csv_delimiter` | One character, default comma; CR, LF and NUL are rejected |
-| `csv_null` (repeat, optional) | Exact tokens converted to null; none by default; at most 32 tokens |
+| `csv_null` (repeat, optional) | Exact tokens converted to null; none by default; at most 32 |
 
-Options apply to all CSV files. Each text option is limited to 1 KiB. Encoding and
-delimiter occur at most once. Empty strings are not null unless you explicitly
-send an empty `csv_null`. Typed values follow the public CardReport CSV adapter:
-column names and types come from the pinned template. No schema inference, pandas,
-SQL, filesystem directory lookup or external fetch is involved.
+Each JSON/YAML file contains a standard `cardreport.data/1` bundle and supplies its
+own dataset names. Its filename is only a label. CSV filenames name datasets:
+`summary.csv` supplies `summary`, whose fields/types come from the pinned template.
+CSV files include a header. No schema inference, pandas, SQL or external fetch is involved.
 
-Use plain filenames without path separators. Names are case-sensitive; `.csv`
-extensions are case-insensitive. Unknown CSV datasets, duplicate names within or
-across formats, unknown parts/options and repeated `data` parts fail validation.
-The bundle is interpreted by its filename extension, not its part Content-Type.
-Client filenames are metadata only and are never used as server filesystem paths.
+All datasets are merged; duplicate names are errors, never overrides. Names are
+case-sensitive, file extensions case-insensitive. Use plain filenames without path
+separators. Unknown CSV datasets, unsupported extensions and unknown/repeated
+options fail validation. File types come from extensions, not part Content-Type.
+Client filenames are never used as server filesystem paths.
+
+Options apply to every CSV; JSON/YAML types are unaffected. Each text option is
+limited to 1 KiB. Encoding/delimiter occur at most once. Empty strings are not null
+unless an empty `csv_null` is supplied.
 
 ```sh
 curl --fail-with-body \
   'http://127.0.0.1:18000/v1/reports?template_id=monthly&template_version=1&renderer=weasyprint' \
   -F 'files=@summary.csv' \
   -F 'files=@export.csv;filename=payments.csv' \
-  -F 'data=@other.yaml' \
+  -F 'files=@other.yaml' \
+  -F 'files=@additional.json' \
   -F 'csv_encoding=utf-8-sig' \
   -F 'csv_delimiter=;' \
   -F 'csv_null=NULL' \
   -F 'csv_null='
 ```
 
-`export.csv;filename=payments.csv` is an alias: the dataset is `payments` without
-renaming the local file. Omit the optional parts when using ordinary comma-separated
-UTF-8 CSV. Let curl, httpx or browser FormData generate the multipart boundary.
-Swagger exposes the CSV file array and optional fields at `/docs`. Its empty text
-placeholder for an unselected `data` file is treated as absent; a nonempty text
-`data` part is rejected. Repeated `data` parts are always rejected.
+`filename=payments.csv` provides an alias without renaming the local file. Let
+curl, httpx or browser FormData construct the boundary. Swagger `/docs` exposes
+one repeated file list and optional CSV settings. No separate `data` part is accepted.
 
-The **entire request**, including multipart framing and options, must fit
-`CARDREPORT_INPUT_LIMIT` (at most 16 MiB). Count and content limits apply to the
-combined datasets; CSV does not bypass the configured row/cell budgets. The API
-streams and hashes the original body without parsing it. The render child parses
-it with Starlette/python-multipart, then uses `cardreport.adapters.csv.from_csv`
-and `ReportTemplate.bind(..., limits=...)`. Multipart spools and CSV scratch files
-are local to the attempt; worker memory and temporary storage remain bounded by
-input and concurrency limits, not constant per-row streaming.
+The **entire request**, including framing/options, must fit `CARDREPORT_INPUT_LIMIT`
+(at most 16 MiB). Combined dataset limits apply across files. The API streams and
+hashes the raw upload; the child parses it with Starlette/python-multipart, uses
+CardReport's public adapters and binds with configured limits. Temporary spools
+are closed and generated scratch paths removed after use. This is bounded file
+loading, not constant-memory row streaming.
 
-A missing/invalid boundary returns 400, unsupported Content-Encoding/charset 415,
-and an oversized upload 413. Body errors (including malformed/truncated multipart,
-invalid CSV/options, duplicates and type mismatches) are durably accepted with 202
-and then become terminal `invalid_data` at stage `bind`. They do not retry and do
-not expose input cells in error messages.
+A missing/invalid boundary returns 400, unsupported encoding/charset 415, oversized
+upload 413. Invalid bodies are accepted as jobs (202), then fail terminally with
+`invalid_data`, stage `bind`, without exposing cell contents in error messages.
+Normalized data must also fit the fixed 16 MiB snapshot ceiling. CSV/YAML can expand
+during canonical serialization; excessive expansion fails before rendering with
+`data_snapshot_too_large`. Lowering the raw upload limit does not lower this ceiling.
 
-When upgrading from 0.1.x, pause admission and drain accepted work, then update API
-and workers together before resuming. No DB migration is added. Do not mix old
-workers with a CSV-enabled API: old workers interpret non-JSON input as YAML.
+## Report data
+
+Every new successful report saves a lossless `cardreport.data/1` snapshot of the
+combined typed inputs used for binding, including unused datasets. It is committed
+atomically with the result pointers and cannot be replaced by a stale attempt.
+This is normalized input, not the original files or rendered/aggregated chart values.
+Dates, decimals and nulls retain their types; changing the template later does not
+change the snapshot. Failed reports and older reports have no saved snapshot.
+
+- `GET /v1/reports/{id}/data`: download canonical JSON, with length/hash headers.
+- `GET /v1/reports/{id}/datasets`: `{ "items": [{ "name": "summary", "columns": ["total"], "row_count": 1 }] }`.
+- `GET /v1/reports/{id}/dataset?name=summary&offset=0&limit=100`: a page containing
+  `name`, `columns`, `row_count`, `offset` and `rows` (arrays of cells).
+
+Paged cells are display strings, except null which remains JSON null. Integers and
+decimals retain exact digits; dates/datetimes use ISO format including offsets,
+booleans use `true`/`false`. Download `/data` for typed data instead of display strings.
+`name` is an exact query value, including Unicode or slashes; it is not a storage path.
+`offset` is nonnegative; `limit` is 1–100, default 100. Beyond the last row returns
+an empty page. Dataset names/row counts let the console select and page without
+loading every cell into browser memory.
+
+Status/history include `data_available`. All data endpoints share result expiry:
+409 for unfinished/failed reports, 410 after result expiry, 404 for a missing report,
+`data_unavailable` for an older successful report, or `dataset_not_found` for an
+unknown dataset. Successful views/downloads use `Cache-Control: no-store`. Each view reads a
+bounded, size/hash-verified snapshot; per-API `CARDREPORT_DATA_VIEW_SLOTS` (default 2)
+limits concurrent views. Busy views return 503 with Retry-After. Corrupt snapshots
+return 503 `data_integrity`; a view exceeding its read budget returns 504 `data_timeout`. There is no cache,
+search, data editing, failed-input viewer or automatic rerun.
+
+Snapshots survive raw input collection and expire with the result. Coordinated
+upgrade and migration are required; see [operations](operations.md#file-input-and-report-data-upgrade).

@@ -194,7 +194,7 @@ def test_csv_report(integration_settings: Settings, renderer: str, mixed: bool) 
             data = json.loads((ROOT / "examples/reference_data.json").read_text())
             del data["datasets"]["summary"]
             parts.append(
-                ("data", ("other.yaml", json.dumps(data), "application/octet-stream"))
+                ("files", ("other.yaml", json.dumps(data), "application/octet-stream"))
             )
         response = client.post(
             "/v1/reports",

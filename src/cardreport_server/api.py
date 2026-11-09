@@ -48,6 +48,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
     )
     app.add_middleware(SafeErrors)
+    app.state.data_view_limiter = anyio.CapacityLimiter(config.data_view_slots)
     app.state.upload_limiter = anyio.CapacityLimiter(config.upload_slots)
     app.state.settings = config
     app.state.database = database

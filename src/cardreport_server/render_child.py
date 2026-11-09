@@ -5,6 +5,7 @@ import os
 import signal
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import NoReturn
 from uuid import uuid4
@@ -23,9 +24,10 @@ from cardreport import (
     UnsupportedFeatureError,
     ValidationError,
     WeasyPrintRenderer,
+    datasets_to_json,
 )
 
-from .datasets import load_datasets
+from .datasets import SNAPSHOT_LIMIT, load_datasets
 
 
 class Cancelled(BaseException):
@@ -51,6 +53,11 @@ def main() -> None:
             directory / "input", options["input_type"], template, limits
         )
         report = template.bind(datasets, limits=limits)
+        stage = "snapshot"
+        snapshot = datasets_to_json(
+            datasets, limits=replace(limits, max_json_bytes=SNAPSHOT_LIMIT)
+        )
+        (directory / "data.json").write_text(snapshot, encoding="utf-8")
         stage = "render"
         remaining = min(
             options["render_deadline"] - time.monotonic(), options["render_timeout"]
@@ -83,15 +90,22 @@ def main() -> None:
             "message": "Report execution stopped",
         }
     except (DataError, BindingError, TemplateError, ValidationError):
-        outcome = {
-            "code": "invalid_data" if stage == "bind" else "render_failed",
-            "stage": stage,
-            "message": (
-                "Datasets do not satisfy the template or data limits"
-                if stage == "bind"
-                else "Report export validation failed"
-            ),
-        }
+        if stage == "snapshot":
+            outcome = {
+                "code": "data_snapshot_too_large",
+                "stage": "bind",
+                "message": "Normalized report data exceeds the 16 MiB snapshot limit",
+            }
+        else:
+            outcome = {
+                "code": "invalid_data" if stage == "bind" else "render_failed",
+                "stage": stage,
+                "message": (
+                    "Datasets do not satisfy the template or data limits"
+                    if stage == "bind"
+                    else "Report export validation failed"
+                ),
+            }
     except LayoutOverflowError:
         outcome = {
             "code": "layout_overflow",

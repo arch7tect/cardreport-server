@@ -1,0 +1,9 @@
+format: cardreport.data/1
+datasets:
+  payments:
+    columns:
+    - category
+    - count
+    rows:
+    - category: '2026-11-04'
+      count: 2

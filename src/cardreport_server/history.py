@@ -13,7 +13,8 @@ from .errors import APIError
 State = Literal["queued", "running", "succeeded", "failed", "expired"]
 STATUS_COLUMNS = """id,template_id,template_version,state,output_kind AS output,renderer,
 attempt_no AS attempts,created_at,started_at,finished_at,result_expires_at,
-error,terminal_state,engine_version,image_id,service_version"""
+error,terminal_state,engine_version,image_id,service_version,
+(data_key IS NOT NULL AND NOT result_deleted AND state='succeeded' AND result_expires_at>clock_timestamp()) AS data_available"""
 
 
 def decode_cursor(value: str) -> tuple[datetime, UUID]:

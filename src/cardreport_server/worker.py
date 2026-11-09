@@ -23,6 +23,7 @@ from psycopg import InterfaceError, OperationalError
 from psycopg_pool import PoolTimeout
 
 from . import jobs
+from .datasets import SNAPSHOT_LIMIT
 from .db import Database
 from .render_child import child_environment
 from .settings import Settings
@@ -193,6 +194,22 @@ class Worker:
                 self.storage.prefix
                 + f"results/{attempt.report_id}/{attempt.token}.{attempt.output}"
             )
+            data_path = directory / "data.json"
+            data_size = data_path.stat().st_size
+            if data_size > SNAPSHOT_LIMIT:
+                self.complete(
+                    attempt,
+                    {
+                        "code": "data_snapshot_too_large",
+                        "stage": "bind",
+                        "message": "Normalized report data exceeds the 16 MiB snapshot limit",
+                    },
+                )
+                return
+            data_key = (
+                self.storage.prefix
+                + f"results/{attempt.report_id}/{attempt.token}.data.json"
+            )
             self.storage.put(
                 key,
                 result,
@@ -200,6 +217,7 @@ class Worker:
                 if attempt.output == "pdf"
                 else "text/html; charset=utf-8",
             )
+            self.storage.put(data_key, data_path, "application/json")
             if not running.cancelled.is_set():
                 jobs.finish(
                     self.db,
@@ -208,6 +226,11 @@ class Worker:
                         "key": key,
                         "size": size,
                         "hash": hashlib.sha256(result.read_bytes()).hexdigest(),
+                    },
+                    data={
+                        "key": data_key,
+                        "size": data_size,
+                        "hash": hashlib.sha256(data_path.read_bytes()).hexdigest(),
                     },
                     engine_version=version("cardreport"),
                     image_id=self.settings.image_id,

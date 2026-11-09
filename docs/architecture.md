@@ -372,10 +372,10 @@ and `TMPDIR` point to the attempt directory.
 The child performs the following checks and actions:
 
 1. Read the options and revalidate the stored template through CardReport.
-2. Parse JSON/YAML datasets, or multipart CSV files and an optional bundle, with
+2. Parse JSON/YAML datasets, or multipart JSON/YAML/CSV files, with
    the configured `DataLimits`, then bind them to the
    template using the library's public API.
-3. Calculate remaining render time. A nonpositive remainder is a timeout, not a
+3. Serialize the bound input datasets to a lossless, size-limited snapshot, then calculate remaining render time. A nonpositive remainder is a timeout, not a
    dataset error.
 4. Instantiate the requested Chromium or WeasyPrint renderer and call
    `Report.to_pdf()` or `Report.to_html()`. There is no automatic engine fallback.
@@ -571,14 +571,27 @@ Failures are retried in later maintenance cycles. Healthy workers can recover
 jobs left by failed workers; no separate recovery service is required.
 
 
-## CSV transport
+## File transport and report data
 
-CSV uses the existing streamed input object and queue. `input_type` stores a
-normalized multipart Content-Type with its validated boundary; no additional DB
-column, archive format or queue is required. The render child parses multipart
-from the bounded file, calls CardReport's public CSV adapter with each declared
-schema, and applies the configured limits again when binding all datasets.
-See the [CSV API contract](user/api.md#csv-input) for input and upgrade rules.
+Mixed file input uses the existing streamed object and queue. `input_type` stores
+a normalized multipart Content-Type with its validated boundary. The child merges
+disjoint named JSON/YAML bundles and typed CSV datasets using public library
+adapters, then binds with cumulative limits. Client filenames are not paths.
+
+After binding, the child serializes a lossless snapshot with the public encoder,
+bounded by the library's 16 MiB ceiling, before rendering. The supervisor uploads
+both artifacts to attempt-specific keys and commits their pointers in the same
+fenced transaction. A failed/stale attempt publishes neither pointer; abandoned
+objects are collected after the orphan grace. Successful snapshots share result
+expiry and deletion grace, surviving earlier raw-input collection. Migration adds
+nullable key/size/hash metadata; old results have no snapshot.
+
+The API offers canonical JSON download and a catalog/paged display view. Bounded
+reads verify size/hash and expiry; a per-pod limiter rejects excess viewers instead
+of queueing unbounded parsing work. Cells are encoded as display strings to preserve
+precision; the canonical download retains types. No cache or data query engine is
+introduced. See [the API contract](user/api.md#csv-input) and
+[upgrade procedure](user/operations.md#file-input-and-report-data-upgrade).
 
 
 ## Health, observability and code map

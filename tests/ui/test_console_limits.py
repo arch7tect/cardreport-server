@@ -47,7 +47,7 @@ def test_real_early_upload_limit(
             lambda request: count.append(request) if request.method == "POST" else None,
         )
         page.goto(f"http://127.0.0.1:{port}/ui/#/new-report?template={slug}")
-        page.get_by_label("Dataset file", exact=True).set_input_files(
+        page.get_by_label("Data files", exact=True).set_input_files(
             {
                 "name": "too-large.json",
                 "mimeType": "application/json",
@@ -59,7 +59,7 @@ def test_real_early_upload_limit(
         expect(page.get_by_role("status")).to_contain_text(
             re.compile("limit|Acceptance is uncertain")
         )
-        assert page.get_by_label("Dataset file", exact=True).input_value()
+        expect(page.get_by_label("Selected files").locator("li")).not_to_have_count(0)
         assert len(count) == 1
         with database.pool.connection() as conn:
             row = conn.execute(

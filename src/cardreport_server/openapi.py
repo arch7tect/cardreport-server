@@ -62,12 +62,7 @@ def request_schema(kind: Literal["template", "data"]) -> dict[str, Any]:
                         "minItems": 1,
                         "maxItems": 32,
                         "items": {"type": "string", "format": "binary"},
-                        "description": "CSV files; each filename stem names a template dataset.",
-                    },
-                    "data": {
-                        "type": "string",
-                        "format": "binary",
-                        "description": "Optional cardreport.data/1 .json, .yaml or .yml file; names must not overlap CSVs.",
+                        "description": "JSON/YAML bundles and CSV files in any combination. CSV stems name template datasets; bundles contain their own names.",
                     },
                     "csv_encoding": {"type": "string", "default": "utf-8"},
                     "csv_delimiter": {
@@ -85,7 +80,7 @@ def request_schema(kind: Literal["template", "data"]) -> dict[str, Any]:
                 },
             },
             "encoding": {
-                "files": {"contentType": "text/csv", "style": "form", "explode": True},
+                "files": {"style": "form", "explode": True},
                 "csv_null": {"style": "form", "explode": True},
             },
         }

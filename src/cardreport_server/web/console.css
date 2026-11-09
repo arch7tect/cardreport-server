@@ -10,3 +10,8 @@ main{max-width:1320px;margin:0 auto;padding:42px 5% 60px;min-height:calc(100vh -
 .toolbar button,.toolbar select,.toolbar input{min-height:44px}.toolbar button{flex-shrink:0}
 
 .csv-options summary{cursor:pointer;margin-bottom:14px}.csv-options textarea{min-height:76px}.check-field{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:650;margin:0 0 18px}.check-field input{width:auto;margin:0;accent-color:var(--accent)}
+
+.input-files{list-style:none;padding:0;margin:6px 0}.input-files li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.input-files li>div{min-width:0}.input-files strong{display:block;overflow-wrap:anywhere;font-size:13px}.input-files button{flex-shrink:0}
+
+.data-table { max-height: 32rem; overflow: auto; }
+.data-table td { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 6rem; max-width: 30rem; }

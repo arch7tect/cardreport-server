@@ -1,0 +1,48 @@
+{
+  "format": "cardreport.data/1",
+  "datasets": {
+    "attempts": {
+      "columns": [
+        "category",
+        "count"
+      ],
+      "rows": [
+        {
+          "category": "1. All attempts",
+          "count": 34
+        },
+        {
+          "category": "2. No answer / busy / voicemail",
+          "count": 10
+        },
+        {
+          "category": "3. Human answer",
+          "count": 24
+        },
+        {
+          "category": "4. Technical error",
+          "count": 0
+        }
+      ]
+    },
+    "outcomes": {
+      "columns": [
+        "outcome",
+        "clients",
+        "rate"
+      ],
+      "rows": [
+        {
+          "outcome": "Promised to pay",
+          "clients": 3,
+          "rate": 0.6
+        },
+        {
+          "outcome": "Refused",
+          "clients": 2,
+          "rate": 0.4
+        }
+      ]
+    }
+  }
+}

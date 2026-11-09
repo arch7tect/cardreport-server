@@ -63,6 +63,19 @@ def main() -> None:
             for row in json_data[name].rows
         )
     reference.bind(csv_data).to_html()
+    mixed = {name: csv_data[name] for name in ("summary", "funnel")}
+    mixed.update(
+        datasets_from_json(
+            (ROOT / "examples/reference_mixed/activity.json").read_bytes()
+        )
+    )
+    mixed.update(
+        datasets_from_yaml(
+            (ROOT / "examples/reference_mixed/schedule.yaml").read_bytes()
+        )
+    )
+    assert mixed.keys() == json_data.keys()
+    reference.bind(mixed).to_html()
     for path in (ROOT / "deploy").rglob("*.yaml"):
         for item in yaml.safe_load_all(path.read_text()):
             assert isinstance(item, dict) and "apiVersion" in item and "kind" in item, (

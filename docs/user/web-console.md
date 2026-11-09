@@ -37,22 +37,23 @@ at submission lets the server resolve the latest version before reading data.
 A New report action on a template detail pins the viewed version.
 
 Choose Chromium or WeasyPrint and PDF or HTML. WeasyPrint supports dashboard
-layouts; use Chromium for flow and table pagination. Upload a JSON/YAML
-`cardreport.data/1` bundle or paste its text. The extension suggests a media type;
-you can change it explicitly. Files are submitted directly, without parsing their
-contents in the browser.
+layouts; use Chromium for flow and table pagination. **Add files** accepts JSON,
+YAML and CSV in any combination. Each selection adds to the visible list; cancelling
+the file chooser keeps earlier selections. Use **×** beside a file to remove it
+before submission. Removing the last file leaves an empty list; Generate asks for
+at least one file. Switching to **Paste text** keeps the file list until you leave
+the form, and submits only the pasted bundle. No original file is changed.
 
-Alternatively, choose **CSV files** and select multiple files in one selection.
-Each filename supplies the dataset name (`summary.csv` → `summary`); column types
-come from the pinned template. You may add one JSON/YAML bundle for other datasets.
-Names must be unique across every input. Rename a local file to change its dataset
-name. The console does not modify or persist the original files.
+JSON/YAML files are `cardreport.data/1` bundles with their own dataset names. CSV
+filenames name datasets (`summary.csv` → `summary`), with column types from the
+pinned template. Names must be unique across every file. Files go directly to the
+server without browser parsing. Paste mode lets you explicitly select JSON/YAML.
 
 Expand **CSV options** to set encoding (default `utf-8`), a one-character delimiter
 (default comma; enter `\t` for a tab), or exact null tokens, one per line. **Treat empty cells as null**
 adds the empty token explicitly. Without that option, empty text stays empty and
 empty numeric cells fail validation. Use `utf-8-sig` for UTF-8 CSV with a BOM.
-Options apply to every CSV file in the submission; the optional bundle retains its
+Options apply to every CSV file in the submission; bundles retain their
 own JSON/YAML types. The full multipart body, including boundaries and options,
 must fit the configured input cap. File-size prechecks cannot include all transport
 overhead; the server remains authoritative.
@@ -79,6 +80,15 @@ renderer/output, safe error and actual versions. Only the visible, nonterminal
 detail is polled. Polling pauses in hidden tabs and stops on navigation or terminal
 state; temporary read errors back off and mark the displayed status stale. Refresh
 status is always available. Health/readiness and report success are separate checks.
+
+**Show data** opens the immutable datasets saved with this successful report.
+Select a dataset to see columns and up to 100 rows, then use Previous/Next rows.
+The viewer preserves exact numeric values and escapes text; null appears as `∅`.
+**Download data JSON** returns the whole typed bundle for reuse. **Hide data**
+closes the table. A temporary page error offers **Retry rows**; if the dataset
+list itself fails to load, hide and reopen data. Neither changing a template nor expiring the original upload
+changes these saved data. Data expires together with the result. Older reports
+show an unavailable explanation; failed reports do not save snapshots.
 
 Download retrieves the original committed bytes. **Open PDF** opens the same result
 in a new tab using the browser’s native PDF viewer; Download remains a separate

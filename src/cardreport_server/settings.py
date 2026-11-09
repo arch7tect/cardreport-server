@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     data_max_rows: int = Field(default=2000, ge=1, le=2000)
     data_max_cells: int = Field(default=100000, ge=1, le=100000)
     output_limit: int = Field(default=32 * 1024 * 1024, ge=1024, le=128 * 1024 * 1024)
+    data_view_slots: int = Field(default=2, ge=1, le=8)
     upload_slots: int = Field(default=4, ge=1, le=64)
     upload_timeout: float = Field(default=120, gt=0, le=600)
     upload_idle_timeout: float = Field(default=30, gt=0, le=120)

@@ -45,7 +45,7 @@ def test_upload_preview_and_download(
     page.get_by_label("Renderer", exact=True).select_option(renderer)
     page.get_by_label("Output", exact=True).select_option("html")
     source = ROOT / f"examples/reference_data.{extension}"
-    page.get_by_label("Dataset file", exact=True).set_input_files(source)
+    page.get_by_label("Data files", exact=True).set_input_files(source)
     expect(page.get_by_label("Data format", exact=True)).to_have_value(
         "application/" + ("yaml" if extension == "yaml" else "json")
     )
@@ -143,7 +143,7 @@ def test_upload_preview_and_download(
         assert payload == client.get(f"/v1/reports/{identifier}/content").content
     page.get_by_role("link", name="Use these settings", exact=True).click()
     expect(page.get_by_label("Template version", exact=True)).to_have_value("1")
-    assert page.get_by_label("Dataset file", exact=True).input_value() == ""
+    assert page.get_by_label("Data files", exact=True).input_value() == ""
 
 
 def test_paste_and_pdf_flow(page: Page, api_url: str) -> None:
@@ -164,13 +164,26 @@ def test_paste_and_pdf_flow(page: Page, api_url: str) -> None:
     assert len(pdf.pages) >= 3
     text = "\n".join(p.extract_text() for p in pdf.pages)
     assert all(text.count(f"ITEM-{i:04d}") == 1 for i in range(1, 151))
+    page.get_by_role("button", name="Show data", exact=True).click()
+    expect(page.locator(".data-table tbody")).to_contain_text("ITEM-0001")
+    expect(page.locator(".data-table tbody tr")).to_have_count(100)
+
+    def busy_once(route: Route) -> None:
+        route.fulfill(status=503, json={"error": {"message": "Viewers busy"}})
+
+    page.route("**/dataset?*", busy_once, times=1)
+    page.get_by_role("button", name="Next rows", exact=True).click()
+    page.get_by_role("button", name="Retry rows", exact=True).click()
+    expect(page.locator(".data-table tbody")).to_contain_text("ITEM-0101")
+    expect(page.locator(".data-table tbody tr")).to_have_count(50)
+    expect(page.get_by_role("button", name="Next rows", exact=True)).to_be_disabled()
 
 
 def test_render_failure_is_visible(page: Page, api_url: str) -> None:
     slug = register_example(api_url, "flow")
     page.goto(f"/ui/#/new-report?template={slug}")
     page.get_by_label("Renderer", exact=True).select_option("weasyprint")
-    page.get_by_label("Dataset file", exact=True).set_input_files(
+    page.get_by_label("Data files", exact=True).set_input_files(
         ROOT / "examples/flow_data.json"
     )
     page.get_by_role("button", name="Generate report", exact=True).click()
@@ -200,12 +213,12 @@ def test_lost_acceptance_does_not_resubmit(page: Page, api_url: str) -> None:
 
     page.route("**/v1/reports?*", lose)
     page.goto(f"/ui/#/new-report?template={slug}")
-    page.get_by_label("Dataset file", exact=True).set_input_files(
+    page.get_by_label("Data files", exact=True).set_input_files(
         ROOT / "examples/reference_data.json"
     )
     page.get_by_role("button", name="Generate report", exact=True).dblclick()
     expect(page.get_by_role("status")).to_contain_text("Acceptance is uncertain")
-    assert page.get_by_label("Dataset file", exact=True).input_value()
+    expect(page.get_by_label("Selected files").locator("li")).not_to_have_count(0)
     assert count == 1
     with httpx.Client(base_url=api_url) as client:
         rows = client.get("/v1/reports", params={"template_id": slug}).json()["items"]
@@ -290,6 +303,10 @@ def test_generated_markup_is_text(
     expect(frame.get_by_text(marker, exact=True).first).to_be_visible()
     expect(frame.locator("img")).to_have_count(0)
     assert page.evaluate("window.escaped") is None
+    page.get_by_role("button", name="Show data", exact=True).click()
+    expect(page.locator(".data-table").get_by_text(marker, exact=True)).to_be_visible()
+    expect(page.locator(".data-table img")).to_have_count(0)
+
     page.set_viewport_size({"width": 390, "height": 844})
     wait_geometry(
         page,
@@ -324,7 +341,7 @@ def test_native_pdf_new_tab(browser: Browser, api_url: str, renderer: str) -> No
         slug = register_example(api_url)
         main.goto(f"/ui/#/new-report?template={slug}")
         main.get_by_label("Renderer", exact=True).select_option(renderer)
-        main.get_by_label("Dataset file", exact=True).set_input_files(
+        main.get_by_label("Data files", exact=True).set_input_files(
             ROOT / "examples/reference_data.json"
         )
         main.get_by_role("button", name="Generate report", exact=True).click()
@@ -374,17 +391,14 @@ def test_csv_upload(page: Page, api_url: str, renderer: str, mixed: bool) -> Non
     expect(page.get_by_label("Template version", exact=True)).to_have_value("1")
     page.get_by_label("Renderer", exact=True).select_option(renderer)
     page.get_by_label("Output", exact=True).select_option("html")
-    page.get_by_label("Data input", exact=True).select_option("csv")
     paths = sorted((ROOT / "examples/reference_csv").glob("*.csv"))
-    page.get_by_label("CSV files", exact=True).set_input_files(
+    page.get_by_label("Data files", exact=True).set_input_files(
         [p for p in paths if not mixed or p.stem == "summary"]
     )
     if mixed:
         data = json.loads((ROOT / "examples/reference_data.json").read_text())
         del data["datasets"]["summary"]
-        page.get_by_label(
-            "Additional JSON/YAML bundle (optional)", exact=True
-        ).set_input_files(
+        page.get_by_label("Data files", exact=True).set_input_files(
             {
                 "name": "other.yaml",
                 "mimeType": "application/octet-stream",
@@ -398,7 +412,8 @@ def test_csv_upload(page: Page, api_url: str, renderer: str, mixed: bool) -> Non
         csv.writer(tsv, delimiter="\t").writerows(
             csv.reader(io.StringIO(source.read_text()))
         )
-        page.get_by_label("CSV files", exact=True).set_input_files(
+        page.get_by_role("button", name="Remove summary.csv", exact=True).click()
+        page.get_by_label("Data files", exact=True).set_input_files(
             {
                 "name": "summary.csv",
                 "mimeType": "text/csv",
@@ -429,18 +444,18 @@ def test_csv_upload(page: Page, api_url: str, renderer: str, mixed: bool) -> Non
 def test_csv_duplicate_names_and_mode_switch(page: Page, api_url: str) -> None:
     slug = register_example(api_url)
     page.goto(f"/ui/#/new-report?template={slug}")
-    page.get_by_label("Data input", exact=True).select_option("csv")
     file: FilePayload = {
         "name": "summary.csv",
         "mimeType": "text/csv",
         "buffer": b"total\n1\n",
     }
-    page.get_by_label("CSV files", exact=True).set_input_files([file, file])
+    page.get_by_label("Data files", exact=True).set_input_files([file, file])
     page.get_by_role("button", name="Generate report", exact=True).click()
     expect(page.get_by_role("status")).to_contain_text("distinct dataset names")
-    page.get_by_label("Data input", exact=True).select_option("file")
+    while page.get_by_role("button", name="Remove summary.csv", exact=True).count():
+        page.get_by_role("button", name="Remove summary.csv", exact=True).first.click()
     page.get_by_label("Output", exact=True).select_option("html")
-    page.get_by_label("Dataset file", exact=True).set_input_files(
+    page.get_by_label("Data files", exact=True).set_input_files(
         ROOT / "examples/reference_data.json"
     )
     page.get_by_role("button", name="Generate report", exact=True).click()
@@ -460,7 +475,7 @@ def test_swagger_csv_and_repeated_nulls(
     operation.get_by_role("button", name="Try it out", exact=True).click()
     operation.get_by_label("Request content type").select_option("multipart/form-data")
     operation.get_by_placeholder("template_id", exact=True).fill(slug)
-    files = operation.locator("tr").filter(has_text="CSV files; each filename")
+    files = operation.locator("tr").filter(has_text="JSON/YAML bundles and CSV files")
     paths = sorted((ROOT / "examples/reference_csv").glob("*.csv"))
     for index, path in enumerate(paths):
         if index:
@@ -491,3 +506,60 @@ def test_swagger_csv_and_repeated_nulls(
     assert all(path.read_bytes() in raw for path in paths)
     page.goto(f"/ui/#/reports/{job['id']}")
     expect(page.locator(".badge.succeeded")).to_be_visible(timeout=180000)
+
+
+def test_accumulating_files_remove_cancel_and_data_view(
+    page: Page, api_url: str
+) -> None:
+    import json
+
+    slug = register_example(api_url)
+    page.goto(f"/ui/#/new-report?template={slug}")
+    page.get_by_label("Output", exact=True).select_option("html")
+    picker = page.get_by_label("Data files", exact=True)
+    picker.set_input_files(ROOT / "examples/reference_csv/summary.csv")
+    chosen = page.get_by_label("Selected files")
+    expect(chosen.locator("li")).to_have_count(1)
+    page.get_by_role("button", name="Remove summary.csv", exact=True).click()
+    expect(chosen.locator("li")).to_have_count(0)
+    page.get_by_role("button", name="Generate report", exact=True).click()
+    expect(page.get_by_role("status")).to_contain_text("Add at least one data file")
+    picker.set_input_files(ROOT / "examples/reference_csv/summary.csv")
+    # Cancelling an OS file chooser emits cancel; an empty change must also preserve the list.
+    picker.dispatch_event("cancel")
+    picker.set_input_files([])
+    expect(chosen.locator("li")).to_have_count(1)
+    data = json.loads((ROOT / "examples/reference_data.json").read_text())["datasets"]
+    del data["summary"]
+    for index, (name, dataset) in enumerate(data.items()):
+        suffix = "json" if index % 2 else "yaml"
+        picker.set_input_files(
+            {
+                "name": f"{name}.{suffix}",
+                "mimeType": "application/octet-stream",
+                "buffer": json.dumps(
+                    {"format": "cardreport.data/1", "datasets": {name: dataset}}
+                ).encode(),
+            }
+        )
+    picker.set_input_files(
+        {"name": "unwanted.csv", "mimeType": "text/csv", "buffer": b"x\n1\n"}
+    )
+    expect(chosen.locator("li")).to_have_count(6)
+    page.get_by_role("button", name="Remove unwanted.csv", exact=True).click()
+    expect(chosen.locator("li")).to_have_count(5)
+    expect(chosen).not_to_contain_text("unwanted.csv")
+    page.get_by_role("button", name="Generate report", exact=True).click()
+    expect(page.locator(".badge.succeeded")).to_be_visible(timeout=180000)
+    page.get_by_role("button", name="Show data", exact=True).click()
+    expect(page.get_by_label("Dataset", exact=True)).to_be_visible()
+    page.get_by_label("Dataset", exact=True).select_option("summary")
+    expect(page.locator(".data-table tbody")).to_contain_text("21")
+    with page.expect_download() as downloaded:
+        page.get_by_role("link", name="Download data JSON", exact=True).click()
+    from cardreport import datasets_from_json
+
+    snapshot = datasets_from_json(Path(downloaded.value.path()).read_bytes())
+    assert set(snapshot) == {"summary", *data.keys()}
+    page.get_by_role("button", name="Hide data", exact=True).click()
+    expect(page.locator(".data-table")).to_have_count(0)

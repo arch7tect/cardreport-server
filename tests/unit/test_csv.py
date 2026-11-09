@@ -68,7 +68,7 @@ def test_csv_and_bundle(
     parts = [
         ("files", ("summary.csv", b"total\n42\n")),
         (
-            "data",
+            "files",
             (
                 "other." + suffix,
                 json.dumps(
@@ -103,7 +103,7 @@ def test_csv_and_bundle(
         ("csv_null", (None, "x" * 1025)),
         ("data", ("data.txt", "{}")),
         (
-            "data",
+            "files",
             (
                 "data.json",
                 '{"format":"cardreport.data/1","datasets":{"summary":{"columns":["total"],"rows":[{"total":1}]}}}',
@@ -162,7 +162,7 @@ def test_aggregate_csv_limits(tmp_path: Path, template_spec: dict[str, object]) 
         [
             ("files", ("summary.csv", b"total\n42\n")),
             (
-                "data",
+                "files",
                 (
                     "extra.json",
                     '{"format":"cardreport.data/1","datasets":{"extra":{"columns":["v"],"rows":[{"v":1}]}}}',
@@ -204,19 +204,6 @@ def test_multipart_headers(header: str, valid: bool) -> None:
         media_type(request, 100)
 
 
-def test_swagger_empty_optional_file(
-    tmp_path: Path, template_spec: dict[str, object]
-) -> None:
-    csv = ("files", ("summary.csv", b"total\n42\n"))
-    empty = ("data", (None, ""))
-    load(tmp_path, [csv, empty], template_spec)
-    for part in (empty, ("data", ("bundle.json", "{}"))):
-        with pytest.raises(DataError):
-            load(tmp_path, [csv, empty, part], template_spec)
-    with pytest.raises(DataError):
-        load(tmp_path, [csv, ("data", (None, "{}"))], template_spec)
-
-
 def test_csv_bom(tmp_path: Path, template_spec: dict[str, object]) -> None:
     load(
         tmp_path,
@@ -235,7 +222,6 @@ def test_csv_maximum_option_fields(
         tmp_path,
         [
             ("files", ("summary.csv", b"total\n42\n")),
-            ("data", (None, "")),
             ("csv_encoding", (None, "utf-8")),
             ("csv_delimiter", (None, ",")),
             *[("csv_null", (None, f"NULL-{index}")) for index in range(32)],
@@ -258,7 +244,7 @@ def test_child_applies_combined_limits(
         [
             ("files", ("summary.csv", b"total\n42\n")),
             (
-                "data",
+                "files",
                 (
                     "extra.json",
                     '{"format":"cardreport.data/1","datasets":{"extra":{"columns":["v"],"rows":[{"v":1}]}}}',
@@ -286,3 +272,67 @@ def test_child_applies_combined_limits(
     outcome = json.loads((tmp_path / "outcome.json").read_text())
     assert outcome["code"] == "invalid_data" and outcome["stage"] == "bind"
     assert not (tmp_path / "result").exists()
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_multiple_bundles_without_csv(
+    tmp_path: Path, template_spec: dict[str, object], duplicate: bool
+) -> None:
+    parts = []
+    for index, suffix in enumerate(["yaml", "json", "yml", "json"]):
+        name = "summary" if index == 0 or duplicate else f"extra{index}"
+        raw = json.dumps(
+            {
+                "format": "cardreport.data/1",
+                "datasets": {name: {"columns": ["total"], "rows": [{"total": index}]}},
+            }
+        )
+        parts.append(("files", ("data." + suffix, raw)))
+    if duplicate:
+        with pytest.raises(DataError, match="Duplicate dataset"):
+            load(tmp_path, parts, template_spec)
+    else:
+        load(tmp_path, parts, template_spec)
+
+
+def test_child_snapshot_uses_typed_values(
+    tmp_path: Path, template_spec: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import signal
+    import sys
+    import time
+
+    from cardreport import datasets_from_json
+
+    from cardreport_server import render_child
+
+    path, kind = multipart(
+        tmp_path, [("files", ("summary.csv", b"total\n999999999999000\n"))]
+    )
+    (tmp_path / "template.json").write_text(json.dumps(template_spec))
+    (tmp_path / "options.json").write_text(
+        json.dumps(
+            {
+                "input_type": kind,
+                "data_limits": {},
+                "output": "html",
+                "renderer": "chromium",
+                "render_timeout": 30,
+                "render_deadline": time.monotonic() + 30,
+                "output_limit": 16 * 1024 * 1024,
+            }
+        )
+    )
+    monkeypatch.setattr(sys, "argv", ["render_child", str(path.parent)])
+    monkeypatch.setattr(signal, "signal", lambda *args: None)
+    render_child.main()
+    assert json.loads((tmp_path / "outcome.json").read_text()) == {"ok": True}
+    snapshot = datasets_from_json((tmp_path / "data.json").read_bytes())
+    assert snapshot["summary"].rows == ((999999999999000,),)
+    # A CSV can fit the raw limit but expand beyond the canonical snapshot limit.
+    monkeypatch.setattr(render_child, "SNAPSHOT_LIMIT", 1)
+    render_child.main()
+    assert (
+        json.loads((tmp_path / "outcome.json").read_text())["code"]
+        == "data_snapshot_too_large"
+    )

@@ -30,7 +30,7 @@ def maintain(db: Database, storage: Storage, settings: Settings) -> None:
             "UPDATE reports SET state='expired' WHERE (state='succeeded' AND result_expires_at<=clock_timestamp()) OR (state='failed' AND input_expires_at<=clock_timestamp())"
         )
         rows = conn.execute(
-            """SELECT id,input_key,result_key,
+            """SELECT id,input_key,result_key,data_key,
             NOT input_deleted AND input_expires_at<=clock_timestamp() AS remove_input,
             NOT result_deleted AND result_expires_at<=clock_timestamp()-(%s*interval '1 second') AS remove_result
             FROM reports WHERE (NOT input_deleted AND input_expires_at<=clock_timestamp())
@@ -45,6 +45,8 @@ def maintain(db: Database, storage: Storage, settings: Settings) -> None:
     for row in rows:
         for role in ("input", "result"):
             if row["remove_" + role] and row[role + "_key"]:
+                if role == "result" and row["data_key"]:
+                    storage.delete(row["data_key"])
                 storage.delete(row[role + "_key"])
                 with db.pool.connection() as conn:
                     # Column names are closed constants, never request values.
@@ -92,8 +94,8 @@ class OrphanSweep:
                 continue
             with db.pool.connection() as conn:
                 referenced = conn.execute(
-                    "SELECT 1 FROM reports WHERE input_key=%s OR result_key=%s LIMIT 1",
-                    (key, key),
+                    "SELECT 1 FROM reports WHERE input_key=%s OR result_key=%s OR data_key=%s LIMIT 1",
+                    (key, key, key),
                 ).fetchone()
             if referenced is None:
                 storage.delete(key)

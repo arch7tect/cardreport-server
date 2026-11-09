@@ -187,6 +187,7 @@ def finish(
     *,
     result: dict[str, Any] | None = None,
     error: dict[str, Any] | None = None,
+    data: dict[str, Any] | None = None,
     engine_version: str,
     image_id: str,
     service_version: str,
@@ -194,10 +195,11 @@ def finish(
     succeeded = result is not None
     state = "succeeded" if succeeded else "failed"
     result = result or {}
+    data = data or {}
     with db.pool.connection() as conn:
         row = conn.execute(
             """UPDATE reports SET state=%s,terminal_state=%s,finished_at=clock_timestamp(),
-            result_key=%s,result_size=%s,result_hash=%s,error=%s,
+            result_key=%s,result_size=%s,result_hash=%s,data_key=%s,data_size=%s,data_hash=%s,error=%s,
             input_expires_at=clock_timestamp()+input_retention*interval '1 second',
             result_expires_at=CASE WHEN %s THEN clock_timestamp()+result_retention*interval '1 second' END,
             metadata_expires_at=clock_timestamp()+metadata_retention*interval '1 second',
@@ -210,6 +212,9 @@ def finish(
                 result.get("key"),
                 result.get("size"),
                 result.get("hash"),
+                data.get("key"),
+                data.get("size"),
+                data.get("hash"),
                 Jsonb(error) if error else None,
                 succeeded,
                 engine_version,

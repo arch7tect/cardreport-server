@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 import anyio
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
@@ -145,3 +145,56 @@ async def report_content(
     from .downloads import download
 
     return await download(report_id, request, disposition)
+
+
+@router.get("/{report_id}/data", responses={200: {"content": {"application/json": {}}}})
+async def report_data(report_id: UUID, request: Request) -> Any:
+    from .downloads import download
+
+    return await download(report_id, request, artifact="data")
+
+
+@router.get("/{report_id}/datasets")
+async def report_datasets(
+    report_id: UUID, request: Request, response: Response
+) -> dict[str, Any]:
+    from .data_view import read_snapshot
+
+    response.headers["Cache-Control"] = "no-store"
+    datasets = await read_snapshot(request, report_id)
+    return {
+        "items": [
+            {"name": name, "columns": dataset.columns, "row_count": len(dataset.rows)}
+            for name, dataset in datasets.items()
+        ]
+    }
+
+
+@router.get("/{report_id}/dataset")
+async def report_dataset(
+    report_id: UUID,
+    name: str,
+    request: Request,
+    response: Response,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+) -> dict[str, Any]:
+    from .data_view import display_cell, read_snapshot
+
+    response.headers["Cache-Control"] = "no-store"
+    datasets = await read_snapshot(request, report_id)
+    if name not in datasets:
+        raise APIError(
+            404, "dataset_not_found", "Dataset does not exist in this report"
+        )
+    dataset = datasets[name]
+    return {
+        "name": name,
+        "columns": dataset.columns,
+        "row_count": len(dataset.rows),
+        "offset": offset,
+        "rows": [
+            [display_cell(value) for value in row]
+            for row in dataset.rows[offset : offset + limit]
+        ],
+    }

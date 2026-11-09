@@ -74,7 +74,7 @@ when submitting `POST /v1/reports`. HTTP 202 confirms durable acceptance, not da
 validation or successful rendering. Do not automatically repeat an upload after an
 uncertain response: it can create a duplicate job.
 
-## Submit CSV files
+## Submit data files
 
 CSV filenames name the datasets: `summary.csv` supplies `summary`. Register the
 [reference template](examples/reference_template.json) as `collections` first,
@@ -90,9 +90,12 @@ curl --fail-with-body \
   -F 'files=@examples/reference_csv/payments.csv'
 ```
 
-The response contains status and download URLs. The web console offers the same
-**CSV files** input. Types come from the stored template; optional encoding,
-delimiter and null tokens match the library adapter. See
+The response contains status and download URLs. In **New report**, **Add files**
+accepts JSON, YAML and CSV together, in one selection or several. Remove any file
+with its × button before submitting. CSV types come from the stored template;
+JSON/YAML bundles contain their own dataset names. Names must not overlap.
+After generation, **Show data** displays the datasets used for that report;
+**Download data JSON** saves their immutable typed snapshot. See
 [CSV API options](docs/user/api.md#csv-input) and the
 [Python multipart example](docs/user/quickstart.md#csv-from-python).
 

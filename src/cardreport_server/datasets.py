@@ -18,6 +18,8 @@ from cardreport.adapters.csv import from_csv
 from starlette.datastructures import Headers, UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
+SNAPSHOT_LIMIT = DataLimits().max_json_bytes
+
 
 class CompleteMultipartParser(MultiPartParser):
     complete = False
@@ -59,8 +61,8 @@ async def _multipart(
     parser = CompleteMultipartParser(
         Headers({"Content-Type": content_type}),
         chunks(),
-        max_files=limits.max_datasets + 1,
-        max_fields=35,
+        max_files=limits.max_datasets,
+        max_fields=34,
         max_part_size=1024,
     )
     try:
@@ -70,20 +72,8 @@ async def _multipart(
     try:
         options: dict[str, str] = {}
         nulls: list[str] = []
-        csvs: list[tuple[str, UploadFile]] = []
-        bundle: UploadFile | None = None
-        data_seen = False
+        uploads: list[UploadFile] = []
         for key, value in form.multi_items():
-            if key == "data":
-                if data_seen:
-                    raise DataError("Repeated multipart data part")
-                data_seen = True
-                if isinstance(value, UploadFile):
-                    bundle = value
-                elif value != "":
-                    raise DataError("The data part must be a JSON/YAML file")
-                # Swagger sends an empty text part for an unselected optional file.
-                continue
             if isinstance(value, str):
                 if key == "csv_null":
                     nulls.append(value)
@@ -93,23 +83,22 @@ async def _multipart(
                     raise DataError("Unknown or repeated multipart option")
             elif key == "files":
                 filename = value.filename or ""
-                # Caller filenames are metadata only, never filesystem paths.
-                if (
-                    "/" in filename
-                    or "\\" in filename
-                    or not filename.lower().endswith(".csv")
-                ):
-                    raise DataError("CSV files require a plain .csv filename")
-                name = filename[:-4]
-                if name not in template.datasets:
-                    raise DataError("CSV dataset is not declared in the template")
-                csvs.append((name, value))
+                if "/" in filename or "\\" in filename:
+                    raise DataError("Input files require a plain filename")
+                if Path(filename).suffix.lower() not in {
+                    ".csv",
+                    ".json",
+                    ".yaml",
+                    ".yml",
+                }:
+                    raise DataError("Use CSV, JSON or YAML files")
+                uploads.append(value)
             else:
-                raise DataError("Unknown or repeated multipart file part")
+                raise DataError("Unknown multipart file part")
         if len(nulls) > 32:
             raise DataError("At most 32 null tokens are supported")
-        if not csvs:
-            raise DataError("At least one CSV file is required")
+        if not uploads:
+            raise DataError("At least one input file is required")
         encoding = options.get("csv_encoding", "utf-8")
         delimiter = options.get("csv_delimiter", ",")
         if len(delimiter) != 1 or delimiter in "\r\n\0":
@@ -117,29 +106,38 @@ async def _multipart(
                 "CSV delimiter must be one character other than newline or NUL"
             )
         datasets: dict[str, Dataset] = {}
-        if bundle is not None:
-            suffix = Path(bundle.filename or "").suffix.lower()
-            kind = {
-                ".json": "application/json",
-                ".yaml": "application/yaml",
-                ".yml": "application/yaml",
-            }.get(suffix, "")
-            datasets = _bundle(await bundle.read(), kind, limits)
-        with tempfile.TemporaryDirectory(prefix="csv-", dir=path.parent) as scratch:
-            for index, (name, upload) in enumerate(csvs):
-                if name in datasets:
+        with tempfile.TemporaryDirectory(
+            prefix="datasets-", dir=path.parent
+        ) as scratch:
+            for index, upload in enumerate(uploads):
+                source_path = Path(upload.filename or "")
+                if source_path.suffix.lower() == ".csv":
+                    name = source_path.stem
+                    if name not in template.datasets:
+                        raise DataError("CSV dataset is not declared in the template")
+                    csv_path = Path(scratch) / str(index)
+                    with csv_path.open("wb") as target:
+                        shutil.copyfileobj(upload.file, target, length=64 * 1024)
+                    incoming = {
+                        name: from_csv(
+                            csv_path,
+                            schema=template.datasets[name],
+                            encoding=encoding,
+                            delimiter=delimiter,
+                            null_values=nulls,
+                            limits=limits,
+                        )
+                    }
+                else:
+                    kind = (
+                        "application/json"
+                        if source_path.suffix.lower() == ".json"
+                        else "application/yaml"
+                    )
+                    incoming = _bundle(await upload.read(), kind, limits)
+                if datasets.keys() & incoming.keys():
                     raise DataError("Duplicate dataset name")
-                csv_path = Path(scratch) / str(index)
-                with csv_path.open("wb") as target:
-                    shutil.copyfileobj(upload.file, target, length=64 * 1024)
-                datasets[name] = from_csv(
-                    csv_path,
-                    schema=template.datasets[name],
-                    encoding=encoding,
-                    delimiter=delimiter,
-                    null_values=nulls,
-                    limits=limits,
-                )
+                datasets.update(incoming)
         # bind(..., limits=limits) checks cumulative cells/text across all inputs.
         return datasets
     finally:

@@ -72,7 +72,66 @@ with (
 
 Poll and download as in the [complete client](../../examples/client.py). The
 [CSV fixtures](../../examples/reference_csv) contain the same synthetic datasets
-as the JSON reference bundle. To combine formats, add a `data` file part named
-`other.json`, `other.yaml` or `other.yml`, containing the remaining datasets.
-Do not send the same dataset twice. See the [CSV contract](api.md#csv-input) for
-aliases, null values, limits and asynchronous validation errors.
+as the JSON reference bundle. To combine formats, add more `files` parts named
+`other.json`, `other.yaml` or `other.yml`, each containing a standard
+`cardreport.data/1` bundle. Multiple bundles are supported without any CSV files.
+Dataset names must be unique across all files. See the [file input contract](api.md#csv-input)
+for aliases, null values, limits and asynchronous validation errors.
+
+## Mixed files from Python
+
+Use the same `files` field for every file. This example combines two CSV datasets,
+one JSON bundle and one YAML bundle; all paths are included in the repository.
+
+```python
+from contextlib import ExitStack
+from pathlib import Path
+import httpx
+
+paths = [
+    Path("examples/reference_csv/summary.csv"),
+    Path("examples/reference_csv/funnel.csv"),
+    Path("examples/reference_mixed/activity.json"),
+    Path("examples/reference_mixed/schedule.yaml"),
+]
+with (
+    ExitStack() as stack,
+    httpx.Client(base_url="http://127.0.0.1:18000", timeout=150) as client,
+):
+    response = client.post(
+        "/v1/reports",
+        params={"template_id": "collections", "output": "html"},
+        files=[
+            ("files", (path.name, stack.enter_context(path.open("rb"))))
+            for path in paths
+        ],
+    )
+    response.raise_for_status()
+    job = response.json()
+    print(job["status_url"])
+```
+
+## Inspect the data used by a report
+
+After status becomes `succeeded`, use the immutable snapshot saved with that result:
+
+```python
+catalog = client.get(f"/v1/reports/{job['id']}/datasets")
+catalog.raise_for_status()
+for dataset in catalog.json()["items"]:
+    page = client.get(
+        f"/v1/reports/{job['id']}/dataset",
+        params={"name": dataset["name"], "offset": 0, "limit": 100},
+    )
+    page.raise_for_status()
+    print(dataset["name"], page.json()["rows"])
+
+snapshot = client.get(f"/v1/reports/{job['id']}/data")
+snapshot.raise_for_status()
+Path("report-data.json").write_bytes(snapshot.content)
+```
+
+Run this inside an open `httpx.Client` context. The paged view returns cell display
+strings (or JSON null) without browser rounding. The download is the typed,
+lossless `cardreport.data/1` representation for re-use with CardReport. The snapshot
+expires with the result; reports generated before this feature have no snapshot.

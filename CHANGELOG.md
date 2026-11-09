@@ -2,16 +2,17 @@
 
 ## 0.2.0
 
-- Generate PDF/HTML from multiple CSV files through the existing report API and
-  web console. Filenames identify datasets; stored templates supply column types.
-- Combine CSV files with an optional JSON/YAML bundle. Configure encoding,
-  delimiter and exact null tokens without converting data on the client.
-- Keep bounded streamed uploads, asynchronous validation, both renderers and
-  cumulative dataset limits. Reject incomplete multipart bodies and duplicate names.
-- Add reference CSV fixtures, Python/curl examples and OpenAPI multipart inputs.
+- Generate reports from multiple JSON, YAML and CSV files in one submission.
+  Dataset names are merged without silent overrides; CSV types come from the template.
+- Add files incrementally in the web console, remove individual files, and retain
+  the selection when cancelling the file chooser. Configure CSV encoding, delimiter
+  and null tokens when needed.
+- Inspect the immutable datasets used for a successful report, browse rows in the
+  console, and download the typed JSON snapshot. Data expires with the result.
+- Add reference CSV fixtures, Python/curl examples, OpenAPI inputs and data endpoints.
 
-Upgrade API and workers together after pausing admission and draining work. Old
-workers cannot process multipart jobs. No database migration is required.
+Upgrade requires coordinated API/worker replacement and migration 0007. Existing
+reports remain readable but have no saved dataset snapshot.
 
 ## 0.1.0
 

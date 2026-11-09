@@ -142,3 +142,25 @@ def test_configured_database_timeouts(integration_settings: Settings) -> None:
                 conn.execute("SELECT pg_sleep(1)")
     finally:
         db.close()
+
+
+def test_data_migration_preserves_existing_reports(
+    database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from importlib import import_module
+
+    from psycopg.errors import CheckViolation
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    migration = import_module("migrations.versions.0007_report_data")
+    with database.pool.connection() as conn, conn.transaction():
+        conn.execute(
+            "CREATE TEMP TABLE reports(id integer, result_key text) ON COMMIT DROP"
+        )
+        conn.execute("INSERT INTO reports VALUES (1,'old-result'),(2,NULL)")
+        monkeypatch.setattr(migration.op, "execute", conn.execute)
+        migration.upgrade()
+        rows = conn.execute("SELECT data_key FROM reports").fetchall()
+        assert all(row["data_key"] is None for row in rows)
+        with pytest.raises(CheckViolation), conn.transaction():
+            conn.execute("UPDATE reports SET data_key='orphan' WHERE id=2")
