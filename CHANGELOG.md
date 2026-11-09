@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 — 2026-11-09
+## 0.2.0
 
 - Generate PDF/HTML from multiple CSV files through the existing report API and
   web console. Filenames identify datasets; stored templates supply column types.
