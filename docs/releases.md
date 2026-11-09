@@ -96,8 +96,9 @@ and run:
 # Replace this placeholder with the multi-platform digest from images.json.
 release_image=ghcr.io/arch7tect/cardreport-server@sha256:REPLACE_WITH_RELEASE_DIGEST
 release_docker_config=$(mktemp -d)
-docker --config "$release_docker_config" pull "$release_image"
-docker --config "$release_docker_config" run --rm "$release_image" \
+release_docker_host=$(docker context inspect --format '{{.Endpoints.docker.Host}}')
+docker --config "$release_docker_config" --host "$release_docker_host" pull "$release_image"
+docker --config "$release_docker_config" --host "$release_docker_host" run --rm "$release_image" \
   /app/.venv/bin/python -m cardreport_server smoke
 ```
 
