@@ -189,7 +189,7 @@ not throughput guarantees. Measure your own report shape and concurrency.
    exact revision gate intentionally rejects a newer schema. Otherwise keep admission
    paused and forward-fix; any offline backup restoration requires explicit approval.
 
-This unreleased development database moved through revisions 0001–0006. Revision
+Before the initial release, the development database moved through revisions 0001–0006. Revision
 0003 repairs only initial synthetic-fixture digests after changing JSONB to JSON;
 there was no published user-data migration. Do not reuse this repair pattern to
 rewrite immutable production template versions silently.
@@ -228,3 +228,14 @@ admission/template mutations, drain work and stop old workers, migrate explicitl
 then start matching images. Existing jobs/templates remain intact. Older images
 can reject the new revision even though only indexes changed; do not assume an
 automatic rollback or run a destructive downgrade.
+
+
+### CSV input upgrade
+
+Release 0.2 adds multipart job inputs without a database migration. Follow the
+same pause/drain/stop/update/resume sequence above for **both API and workers**.
+An old worker would treat a CSV multipart job as YAML and permanently fail it.
+To roll back, drain all multipart jobs using the new workers before starting old
+images; the unchanged DB revision alone does not establish input compatibility.
+After updating, submit a small CSV report through the API or web console and check
+that its status succeeds. See the [CSV contract](api.md#csv-input).

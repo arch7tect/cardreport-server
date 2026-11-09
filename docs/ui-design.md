@@ -11,6 +11,9 @@ This adds a small developer-facing console to the existing service. The
 The [architecture](architecture.md) describes current runtime behavior;
 [HTTP API](user/api.md) remains the current API reference.
 
+The 0.2 [CSV input extension](user/api.md#csv-input) supersedes the CSV exclusion
+in this original design; other boundaries remain unchanged.
+
 ## Scope and choices
 
 The console covers template management, report submission, history, status and

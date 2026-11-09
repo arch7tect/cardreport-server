@@ -19,8 +19,14 @@ from cardreport_server.templates import register
 pytestmark = pytest.mark.integration
 
 
+@pytest.mark.parametrize(
+    "content_type", ["application/json", "multipart/form-data; boundary=test"]
+)
 def test_tcp_streams(
-    integration_settings: Settings, database: Database, template_spec: dict[str, object]
+    integration_settings: Settings,
+    database: Database,
+    template_spec: dict[str, object],
+    content_type: str,
 ) -> None:
     settings = integration_settings.model_copy(
         update={
@@ -49,7 +55,7 @@ def test_tcp_streams(
             assert thread.is_alive() and time.monotonic() < deadline
             time.sleep(0.01)
         url = f"http://127.0.0.1:{port}/v1/reports?template_id={slug}"
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": content_type}
         response = httpx.post(url, content=iter([b"{", b"}"]), headers=headers)
         assert response.status_code == 202
         assert (
@@ -60,7 +66,7 @@ def test_tcp_streams(
         )
         raw = socket.create_connection(("127.0.0.1", port))
         raw.sendall(
-            f"POST /v1/reports?template_id={slug} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n".encode()
+            f"POST /v1/reports?template_id={slug} HTTP/1.1\r\nHost: localhost\r\nContent-Type: {content_type}\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n".encode()
         )
         time.sleep(0.05)
         assert httpx.post(url, content=b"{}", headers=headers).status_code == 429
@@ -69,7 +75,7 @@ def test_tcp_streams(
         raw.close()
         interrupted = socket.create_connection(("127.0.0.1", port))
         interrupted.sendall(
-            f"POST /v1/reports?template_id={slug} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 500\r\n\r\nx".encode()
+            f"POST /v1/reports?template_id={slug} HTTP/1.1\r\nHost: localhost\r\nContent-Type: {content_type}\r\nContent-Length: 500\r\n\r\nx".encode()
         )
         interrupted.close()
         time.sleep(0.1)

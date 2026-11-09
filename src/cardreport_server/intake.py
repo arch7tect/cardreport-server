@@ -1,6 +1,7 @@
 """Bounded raw HTTP intake; no whole dataset parsing in API handlers."""
 
 import asyncio
+import re
 from email.message import Message
 
 from fastapi import Request
@@ -9,7 +10,7 @@ from starlette.requests import ClientDisconnect
 from .errors import APIError
 
 
-def media_type(request: Request, limit: int) -> str:
+def media_type(request: Request, limit: int, *, multipart: bool = False) -> str:
     if request.headers.get("content-encoding", "identity").lower() != "identity":
         raise APIError(
             415, "unsupported_encoding", "Compressed request bodies are not supported"
@@ -18,11 +19,28 @@ def media_type(request: Request, limit: int) -> str:
     content_type["content-type"] = request.headers.get("content-type", "")
     kind = content_type.get_content_type().lower()
     charset = content_type.get_content_charset("utf-8").lower()
-    if kind not in {"application/json", "application/yaml"} or charset != "utf-8":
+    if multipart and kind == "multipart/form-data" and charset == "utf-8":
+        boundaries = [
+            value
+            for key, value in (content_type.get_params() or [])[1:]
+            if key == "boundary"
+        ]
+        if (
+            len(boundaries) != 1
+            or not isinstance(boundaries[0], str)
+            or not re.fullmatch(r"[0-9A-Za-z'()+_,./:=? -]{1,70}", boundaries[0])
+            or boundaries[0].endswith(" ")
+        ):
+            raise APIError(
+                400, "invalid_multipart", "A valid multipart boundary is required"
+            )
+        kind = f'multipart/form-data; boundary="{boundaries[0]}"'
+    elif kind not in {"application/json", "application/yaml"} or charset != "utf-8":
         raise APIError(
             415,
             "unsupported_media_type",
-            "Use application/json or application/yaml with UTF-8",
+            "Use JSON/YAML with UTF-8"
+            + (" or multipart/form-data" if multipart else ""),
         )
     length = request.headers.get("content-length")
     if length is not None:

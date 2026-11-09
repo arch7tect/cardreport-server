@@ -231,3 +231,53 @@ def test_response_lost_after_commit_still_has_job(
             "SELECT state FROM reports WHERE template_id=%s", (slug,)
         ).fetchall()
     assert len(rows) == 1 and rows[0]["state"] == "queued"
+
+
+def test_multipart_is_durable_without_api_parsing(
+    integration_settings: Settings,
+    database: Database,
+    storage: Storage,
+    template_spec: dict[str, object],
+) -> None:
+    slug = "csv-" + uuid4().hex
+    register(database, slug, json.dumps(template_spec).encode(), "application/json")
+    with TestClient(create_app(integration_settings)) as client:
+        request = client.build_request(
+            "POST",
+            "/v1/reports",
+            params={"template_id": slug},
+            files=[("files", ("summary.csv", b"total\n42\n"))],
+        )
+        raw = request.read()
+        response = client.send(request)
+        assert response.status_code == 202, response.text
+        with database.pool.connection() as conn:
+            row = conn.execute(
+                "SELECT input_key,input_type,input_size,input_hash FROM reports WHERE id=%s",
+                (response.json()["id"],),
+            ).fetchone()
+        assert row is not None
+        assert "boundary=" in row["input_type"]
+        assert row["input_size"] == len(raw)
+        assert row["input_hash"] == hashlib.sha256(raw).hexdigest()
+        stream = storage.get(row["input_key"])
+        try:
+            assert stream.read() == raw
+        finally:
+            stream.close()
+        bad = client.post(
+            "/v1/reports",
+            params={"template_id": slug},
+            content=b"broken",
+            headers={"Content-Type": "multipart/form-data; boundary=test"},
+        )
+        assert bad.status_code == 202  # Body validation belongs to the child.
+        assert (
+            client.post(
+                "/v1/reports",
+                params={"template_id": slug},
+                content=b"",
+                headers={"Content-Type": "multipart/form-data"},
+            ).status_code
+            == 400
+        )

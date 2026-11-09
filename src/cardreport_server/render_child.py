@@ -23,9 +23,9 @@ from cardreport import (
     UnsupportedFeatureError,
     ValidationError,
     WeasyPrintRenderer,
-    datasets_from_json,
-    datasets_from_yaml,
 )
+
+from .datasets import load_datasets
 
 
 class Cancelled(BaseException):
@@ -46,14 +46,11 @@ def main() -> None:
     try:
         options = json.loads((directory / "options.json").read_text())
         template = ReportTemplate.from_json((directory / "template.json").read_bytes())
-        raw = (directory / "input").read_bytes()
         limits = DataLimits(**options["data_limits"])
-        datasets = (
-            datasets_from_json(raw, limits=limits)
-            if options["input_type"] == "application/json"
-            else datasets_from_yaml(raw, limits=limits)
+        datasets = load_datasets(
+            directory / "input", options["input_type"], template, limits
         )
-        report = template.bind(datasets)
+        report = template.bind(datasets, limits=limits)
         stage = "render"
         remaining = min(
             options["render_deadline"] - time.monotonic(), options["render_timeout"]

@@ -38,7 +38,7 @@ def component_schemas(kind: Literal["template", "data"]) -> dict[str, Any]:
 
 
 def request_schema(kind: Literal["template", "data"]) -> dict[str, Any]:
-    return {
+    result: dict[str, Any] = {
         "requestBody": {
             "required": True,
             "content": {
@@ -49,6 +49,47 @@ def request_schema(kind: Literal["template", "data"]) -> dict[str, Any]:
             },
         }
     }
+
+    if kind == "data":
+        result["requestBody"]["content"]["multipart/form-data"] = {
+            "schema": {
+                "type": "object",
+                "required": ["files"],
+                "additionalProperties": False,
+                "properties": {
+                    "files": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 32,
+                        "items": {"type": "string", "format": "binary"},
+                        "description": "CSV files; each filename stem names a template dataset.",
+                    },
+                    "data": {
+                        "type": "string",
+                        "format": "binary",
+                        "description": "Optional cardreport.data/1 .json, .yaml or .yml file; names must not overlap CSVs.",
+                    },
+                    "csv_encoding": {"type": "string", "default": "utf-8"},
+                    "csv_delimiter": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1,
+                        "default": ",",
+                    },
+                    "csv_null": {
+                        "type": "array",
+                        "maxItems": 32,
+                        "items": {"type": "string"},
+                        "description": "Exact null tokens, including an empty string if desired. Omitted means no tokens.",
+                    },
+                },
+            },
+            "encoding": {
+                "files": {"contentType": "text/csv", "style": "form", "explode": True},
+                "csv_null": {"style": "form", "explode": True},
+            },
+        }
+    return result
 
 
 def install_schemas(app: FastAPI) -> None:

@@ -30,3 +30,19 @@ def test_renderer_choices_are_documented(settings: Settings) -> None:
     assert renderer["in"] == "query" and not renderer["required"]
     assert renderer["schema"]["enum"] == ["chromium", "weasyprint"]
     assert renderer["schema"]["default"] == "chromium"
+
+
+def test_csv_multipart_is_only_on_reports(settings: Settings) -> None:
+    paths = create_app(settings).openapi()["paths"]
+    content = paths["/v1/reports"]["post"]["requestBody"]["content"]
+    schema = content["multipart/form-data"]["schema"]
+    assert schema["required"] == ["files"]
+    assert schema["properties"]["files"]["items"]["format"] == "binary"
+    assert schema["properties"]["csv_null"]["type"] == "array"
+    assert "application/json" in content and "application/yaml" in content
+    assert (
+        "multipart/form-data"
+        not in paths["/v1/templates/{template_id}/versions"]["post"]["requestBody"][
+            "content"
+        ]
+    )

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0 — 2026-11-09
+
+- Generate PDF/HTML from multiple CSV files through the existing report API and
+  web console. Filenames identify datasets; stored templates supply column types.
+- Combine CSV files with an optional JSON/YAML bundle. Configure encoding,
+  delimiter and exact null tokens without converting data on the client.
+- Keep bounded streamed uploads, asynchronous validation, both renderers and
+  cumulative dataset limits. Reject incomplete multipart bodies and duplicate names.
+- Add reference CSV fixtures, Python/curl examples and OpenAPI multipart inputs.
+
+Upgrade API and workers together after pausing admission and draining work. Old
+workers cannot process multipart jobs. No database migration is required.
+
 ## 0.1.0
 
 First release of CardReport Server, an internal HTTP service and web console for

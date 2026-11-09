@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from playwright.sync_api import Browser, Page, Route, expect
+from playwright.sync_api import Browser, FilePayload, Page, Route, expect
 
 from cardreport_server.db import Database
 
@@ -361,3 +361,133 @@ def test_native_pdf_new_tab(browser: Browser, api_url: str, renderer: str) -> No
         )
         context.close()
         full.close()
+
+
+@pytest.mark.parametrize("renderer,mixed", [("chromium", False), ("weasyprint", True)])
+def test_csv_upload(page: Page, api_url: str, renderer: str, mixed: bool) -> None:
+    import csv
+    import io
+    import json
+
+    slug = register_example(api_url)
+    page.goto(f"/ui/#/new-report?template={slug}&version=1")
+    expect(page.get_by_label("Template version", exact=True)).to_have_value("1")
+    page.get_by_label("Renderer", exact=True).select_option(renderer)
+    page.get_by_label("Output", exact=True).select_option("html")
+    page.get_by_label("Data input", exact=True).select_option("csv")
+    paths = sorted((ROOT / "examples/reference_csv").glob("*.csv"))
+    page.get_by_label("CSV files", exact=True).set_input_files(
+        [p for p in paths if not mixed or p.stem == "summary"]
+    )
+    if mixed:
+        data = json.loads((ROOT / "examples/reference_data.json").read_text())
+        del data["datasets"]["summary"]
+        page.get_by_label(
+            "Additional JSON/YAML bundle (optional)", exact=True
+        ).set_input_files(
+            {
+                "name": "other.yaml",
+                "mimeType": "application/octet-stream",
+                "buffer": json.dumps(data).encode(),
+            }
+        )
+    page.get_by_text("CSV options", exact=True).click()
+    if mixed:
+        source = ROOT / "examples/reference_csv/summary.csv"
+        tsv = io.StringIO()
+        csv.writer(tsv, delimiter="\t").writerows(
+            csv.reader(io.StringIO(source.read_text()))
+        )
+        page.get_by_label("CSV files", exact=True).set_input_files(
+            {
+                "name": "summary.csv",
+                "mimeType": "text/csv",
+                "buffer": tsv.getvalue().encode("utf-8-sig"),
+            }
+        )
+        page.get_by_label("CSV encoding", exact=True).fill("utf-8-sig")
+        page.get_by_label("CSV delimiter", exact=True).fill(r"\t")
+    page.get_by_label("Null tokens", exact=True).fill("NULL\nN/A")
+    page.get_by_label("Treat empty cells as null", exact=True).check()
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    with page.expect_request(
+        lambda r: r.method == "POST" and "/v1/reports?" in r.url
+    ) as sent:
+        page.get_by_role("button", name="Generate report", exact=True).click()
+    assert sent.value.headers["content-type"].startswith(
+        "multipart/form-data; boundary="
+    )
+    expect(page.locator(".badge.succeeded")).to_be_visible(timeout=180000)
+    page.get_by_role("button", name="Preview HTML", exact=True).click()
+    expect(
+        page.frame_locator('iframe[title="Report preview"]').locator("svg").first
+    ).to_be_visible(timeout=30000)
+
+
+def test_csv_duplicate_names_and_mode_switch(page: Page, api_url: str) -> None:
+    slug = register_example(api_url)
+    page.goto(f"/ui/#/new-report?template={slug}")
+    page.get_by_label("Data input", exact=True).select_option("csv")
+    file: FilePayload = {
+        "name": "summary.csv",
+        "mimeType": "text/csv",
+        "buffer": b"total\n1\n",
+    }
+    page.get_by_label("CSV files", exact=True).set_input_files([file, file])
+    page.get_by_role("button", name="Generate report", exact=True).click()
+    expect(page.get_by_role("status")).to_contain_text("distinct dataset names")
+    page.get_by_label("Data input", exact=True).select_option("file")
+    page.get_by_label("Output", exact=True).select_option("html")
+    page.get_by_label("Dataset file", exact=True).set_input_files(
+        ROOT / "examples/reference_data.json"
+    )
+    page.get_by_role("button", name="Generate report", exact=True).click()
+    expect(page.locator(".badge.succeeded")).to_be_visible(timeout=180000)
+
+
+def test_swagger_csv_and_repeated_nulls(
+    page: Page, api_url: str, database: Database, storage: object
+) -> None:
+    from cardreport_server.storage import Storage
+
+    assert isinstance(storage, Storage)
+    slug = register_example(api_url)
+    page.goto("/docs")
+    operation = page.locator("#operations-Reports-submit_v1_reports_post")
+    operation.locator(".opblock-summary").click()
+    operation.get_by_role("button", name="Try it out", exact=True).click()
+    operation.get_by_label("Request content type").select_option("multipart/form-data")
+    operation.get_by_placeholder("template_id", exact=True).fill(slug)
+    files = operation.locator("tr").filter(has_text="CSV files; each filename")
+    paths = sorted((ROOT / "examples/reference_csv").glob("*.csv"))
+    for index, path in enumerate(paths):
+        if index:
+            files.get_by_role("button", name="Add string item").click()
+        files.locator('input[type="file"]').nth(index).set_input_files(path)
+    tokens = operation.locator("tr").filter(has_text="Exact null tokens")
+    tokens.locator('input[type="text"]').fill("NULL")
+    tokens.get_by_role("button", name="Add string item").click()
+    tokens.locator('input[type="text"]').nth(1).fill("N/A")
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/v1/reports?" in r.url
+    ) as submitted:
+        operation.get_by_role("button", name="Execute", exact=True).click()
+    assert submitted.value.status == 202
+    job = submitted.value.json()
+    with database.pool.connection() as conn:
+        row = conn.execute(
+            "SELECT input_key FROM reports WHERE id=%s", (job["id"],)
+        ).fetchone()
+    assert row is not None
+    source = storage.get(row["input_key"])
+    try:
+        raw = source.read()
+    finally:
+        source.close()
+    assert raw.count(b'name="csv_null"') == 2
+    assert b"\r\nNULL\r\n" in raw and b"\r\nN/A\r\n" in raw
+    assert all(path.read_bytes() in raw for path in paths)
+    page.goto(f"/ui/#/reports/{job['id']}")
+    expect(page.locator(".badge.succeeded")).to_be_visible(timeout=180000)

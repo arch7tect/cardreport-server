@@ -40,7 +40,22 @@ Choose Chromium or WeasyPrint and PDF or HTML. WeasyPrint supports dashboard
 layouts; use Chromium for flow and table pagination. Upload a JSON/YAML
 `cardreport.data/1` bundle or paste its text. The extension suggests a media type;
 you can change it explicitly. Files are submitted directly, without parsing their
-contents in the browser. CSV conversion belongs in the library/client, not this UI.
+contents in the browser.
+
+Alternatively, choose **CSV files** and select multiple files in one selection.
+Each filename supplies the dataset name (`summary.csv` → `summary`); column types
+come from the pinned template. You may add one JSON/YAML bundle for other datasets.
+Names must be unique across every input. Rename a local file to change its dataset
+name. The console does not modify or persist the original files.
+
+Expand **CSV options** to set encoding (default `utf-8`), a one-character delimiter
+(default comma; enter `\t` for a tab), or exact null tokens, one per line. **Treat empty cells as null**
+adds the empty token explicitly. Without that option, empty text stays empty and
+empty numeric cells fail validation. Use `utf-8-sig` for UTF-8 CSV with a BOM.
+Options apply to every CSV file in the submission; the optional bundle retains its
+own JSON/YAML types. The full multipart body, including boundaries and options,
+must fit the configured input cap. File-size prechecks cannot include all transport
+overhead; the server remains authoritative.
 The console checks library hard caps; configured server limits can be lower.
 
 Generate submits once and opens the accepted job. A 202 response means that data

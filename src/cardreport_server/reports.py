@@ -33,7 +33,7 @@ async def submit(
     settings = request.app.state.settings
     db = request.app.state.database
     storage = request.app.state.storage
-    kind = media_type(request, settings.input_limit)
+    kind = media_type(request, settings.input_limit, multipart=True)
     limiter = request.app.state.upload_limiter
     try:
         limiter.acquire_nowait()

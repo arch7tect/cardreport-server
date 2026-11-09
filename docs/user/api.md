@@ -64,7 +64,7 @@ migration runs implicitly. CORS is disabled by default.
 
 `template_version` is optional (latest is resolved before reading data). `output`
 is `pdf` (default) or `html`. `renderer` is `chromium` (default) or `weasyprint`.
-The raw body is `cardreport.data/1` in JSON or YAML,
+The raw body is `cardreport.data/1` in JSON or YAML (or [CSV multipart](#csv-input)),
 with the corresponding Content-Type. Content-Length is optional; chunked upload is
 supported. Gzip and other Content-Encoding values are rejected. The input cap is
 16 MiB, checked against both headers and actual streamed bytes. Dataset validity is
@@ -147,3 +147,69 @@ pinned library, a severely oversized dashboard table can produce `render_failed`
 instead of `layout_overflow` on WeasyPrint. Use Chromium flow for table pagination.
 See the
 [CardReport capability matrix](https://github.com/arch7tect/cardreport/blob/main/docs/user/renderers.md#capabilities).
+
+
+## CSV input
+
+`POST /v1/reports` also accepts `multipart/form-data`. Query parameters, admission,
+202 semantics, retries, retention, status and download are identical to JSON/YAML.
+Template registration still accepts only JSON/YAML. A raw `text/csv` body is not
+supported because a report can require several named datasets.
+
+| Part | Meaning |
+| --- | --- |
+| `files` (repeat, required) | CSV files with a header; basename without `.csv` names a declared template dataset |
+| `data` (one, optional) | Existing `cardreport.data/1` bundle; filename must end in `.json`, `.yaml` or `.yml` |
+| `csv_encoding` | Python text encoding used by CardReport; default `utf-8`; use `utf-8-sig` for BOM files |
+| `csv_delimiter` | One character, default comma; CR, LF and NUL are rejected |
+| `csv_null` (repeat, optional) | Exact tokens converted to null; none by default; at most 32 tokens |
+
+Options apply to all CSV files. Each text option is limited to 1 KiB. Encoding and
+delimiter occur at most once. Empty strings are not null unless you explicitly
+send an empty `csv_null`. Typed values follow the public CardReport CSV adapter:
+column names and types come from the pinned template. No schema inference, pandas,
+SQL, filesystem directory lookup or external fetch is involved.
+
+Use plain filenames without path separators. Names are case-sensitive; `.csv`
+extensions are case-insensitive. Unknown CSV datasets, duplicate names within or
+across formats, unknown parts/options and repeated `data` parts fail validation.
+The bundle is interpreted by its filename extension, not its part Content-Type.
+Client filenames are metadata only and are never used as server filesystem paths.
+
+```sh
+curl --fail-with-body \
+  'http://127.0.0.1:18000/v1/reports?template_id=monthly&template_version=1&renderer=weasyprint' \
+  -F 'files=@summary.csv' \
+  -F 'files=@export.csv;filename=payments.csv' \
+  -F 'data=@other.yaml' \
+  -F 'csv_encoding=utf-8-sig' \
+  -F 'csv_delimiter=;' \
+  -F 'csv_null=NULL' \
+  -F 'csv_null='
+```
+
+`export.csv;filename=payments.csv` is an alias: the dataset is `payments` without
+renaming the local file. Omit the optional parts when using ordinary comma-separated
+UTF-8 CSV. Let curl, httpx or browser FormData generate the multipart boundary.
+Swagger exposes the CSV file array and optional fields at `/docs`. Its empty text
+placeholder for an unselected `data` file is treated as absent; a nonempty text
+`data` part is rejected. Repeated `data` parts are always rejected.
+
+The **entire request**, including multipart framing and options, must fit
+`CARDREPORT_INPUT_LIMIT` (at most 16 MiB). Count and content limits apply to the
+combined datasets; CSV does not bypass the configured row/cell budgets. The API
+streams and hashes the original body without parsing it. The render child parses
+it with Starlette/python-multipart, then uses `cardreport.adapters.csv.from_csv`
+and `ReportTemplate.bind(..., limits=...)`. Multipart spools and CSV scratch files
+are local to the attempt; worker memory and temporary storage remain bounded by
+input and concurrency limits, not constant per-row streaming.
+
+A missing/invalid boundary returns 400, unsupported Content-Encoding/charset 415,
+and an oversized upload 413. Body errors (including malformed/truncated multipart,
+invalid CSV/options, duplicates and type mismatches) are durably accepted with 202
+and then become terminal `invalid_data` at stage `bind`. They do not retry and do
+not expose input cells in error messages.
+
+When upgrading from 0.1.x, pause admission and drain accepted work, then update API
+and workers together before resuming. No DB migration is added. Do not mix old
+workers with a CSV-enabled API: old workers interpret non-JSON input as YAML.

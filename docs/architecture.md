@@ -372,7 +372,8 @@ and `TMPDIR` point to the attempt directory.
 The child performs the following checks and actions:
 
 1. Read the options and revalidate the stored template through CardReport.
-2. Parse JSON/YAML datasets with the configured `DataLimits`, then bind them to the
+2. Parse JSON/YAML datasets, or multipart CSV files and an optional bundle, with
+   the configured `DataLimits`, then bind them to the
    template using the library's public API.
 3. Calculate remaining render time. A nonpositive remainder is a timeout, not a
    dataset error.
@@ -568,6 +569,17 @@ maintenance path.
 
 Failures are retried in later maintenance cycles. Healthy workers can recover
 jobs left by failed workers; no separate recovery service is required.
+
+
+## CSV transport
+
+CSV uses the existing streamed input object and queue. `input_type` stores a
+normalized multipart Content-Type with its validated boundary; no additional DB
+column, archive format or queue is required. The render child parses multipart
+from the bounded file, calls CardReport's public CSV adapter with each declared
+schema, and applies the configured limits again when binding all datasets.
+See the [CSV API contract](user/api.md#csv-input) for input and upgrade rules.
+
 
 ## Health, observability and code map
 

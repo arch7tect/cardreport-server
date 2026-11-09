@@ -8,3 +8,5 @@ main{max-width:1320px;margin:0 auto;padding:42px 5% 60px;min-height:calc(100vh -
 .preview-viewport{position:relative;min-width:0;width:100%;height:720px;overflow:auto;border:1px solid var(--line);border-radius:7px;background:white}.preview-canvas{position:relative}.preview-frame{position:absolute;top:0;left:0;border:0;transform-origin:top left;background:white}@media(max-width:850px){.preview-viewport{height:550px}}
 
 .toolbar button,.toolbar select,.toolbar input{min-height:44px}.toolbar button{flex-shrink:0}
+
+.csv-options summary{cursor:pointer;margin-bottom:14px}.csv-options textarea{min-height:76px}.check-field{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:650;margin:0 0 18px}.check-field input{width:auto;margin:0;accent-color:var(--accent)}

@@ -2,11 +2,13 @@
 
 import json
 import re
+from decimal import Decimal
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 import yaml
 from cardreport import ReportTemplate, datasets_from_json, datasets_from_yaml
+from cardreport.adapters.csv import from_csv
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,6 +43,26 @@ def main() -> None:
             template = ReportTemplate.from_yaml(template_path.read_bytes())
             datasets = datasets_from_yaml(data_path.read_bytes())
         template.bind(datasets).to_html()
+    reference = ReportTemplate.from_json(
+        (ROOT / "examples/reference_template.json").read_bytes()
+    )
+    csv_data = {
+        path.stem: from_csv(path, schema=reference.datasets[path.stem])
+        for path in (ROOT / "examples/reference_csv").glob("*.csv")
+    }
+    json_data = datasets_from_json((ROOT / "examples/reference_data.json").read_bytes())
+    assert csv_data.keys() == json_data.keys()
+    for name, dataset in csv_data.items():
+        assert dataset.columns == json_data[name].columns
+        # CSV decimal fields are exact Decimals; this JSON fixture uses numbers.
+        assert dataset.rows == tuple(
+            tuple(
+                Decimal(str(value)) if isinstance(value, float) else value
+                for value in row
+            )
+            for row in json_data[name].rows
+        )
+    reference.bind(csv_data).to_html()
     for path in (ROOT / "deploy").rglob("*.yaml"):
         for item in yaml.safe_load_all(path.read_text()):
             assert isinstance(item, dict) and "apiVersion" in item and "kind" in item, (

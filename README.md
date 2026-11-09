@@ -6,7 +6,7 @@ Manage versioned report templates and generate static PDF/HTML through an intern
 HTTP API, using [CardReport](https://github.com/arch7tect/cardreport).
 
 Templates and data are separate. Register a JSON/YAML template once, then submit
-its ID/version and a streamed bundle of named datasets. PostgreSQL holds metadata
+its ID/version and named datasets as JSON, YAML or CSV files. PostgreSQL holds metadata
 and the queue; S3 holds inputs/results. Replaceable workers run bounded concurrent
 attempts and scale independently from the FastAPI application.
 
@@ -23,7 +23,7 @@ authentication: deploy only on a trusted internal network.
 
 ## Run a released image
 
-Use `ghcr.io/arch7tect/cardreport-server:0.1.0` for API, workers and migrations.
+Use `ghcr.io/arch7tect/cardreport-server:0.2.0` for API, workers and migrations.
 The [installation guide](docs/releases.md#install-a-released-image) starts the full
 stack from the published image, without building it locally. For existing services,
 follow the coordinated upgrade procedure before changing images.
@@ -74,9 +74,31 @@ when submitting `POST /v1/reports`. HTTP 202 confirms durable acceptance, not da
 validation or successful rendering. Do not automatically repeat an upload after an
 uncertain response: it can create a duplicate job.
 
+## Submit CSV files
+
+CSV filenames name the datasets: `summary.csv` supplies `summary`. Register the
+[reference template](examples/reference_template.json) as `collections` first,
+then send the [reference CSV files](examples/reference_csv):
+
+```sh
+curl --fail-with-body \
+  'http://127.0.0.1:18000/v1/reports?template_id=collections&output=pdf' \
+  -F 'files=@examples/reference_csv/summary.csv' \
+  -F 'files=@examples/reference_csv/funnel.csv' \
+  -F 'files=@examples/reference_csv/attempts.csv' \
+  -F 'files=@examples/reference_csv/outcomes.csv' \
+  -F 'files=@examples/reference_csv/payments.csv'
+```
+
+The response contains status and download URLs. The web console offers the same
+**CSV files** input. Types come from the stored template; optional encoding,
+delimiter and null tokens match the library adapter. See
+[CSV API options](docs/user/api.md#csv-input) and the
+[Python multipart example](docs/user/quickstart.md#csv-from-python).
+
 ## Documentation
 
-- [Python quickstart and JSON/YAML examples](docs/user/quickstart.md)
+- [Python quickstart and JSON/YAML/CSV examples](docs/user/quickstart.md)
 - [Web console](docs/user/web-console.md)
 - [HTTP API, status and error contract](docs/user/api.md)
 - [Local Compose and PyCharm setup](docs/user/local-development.md)

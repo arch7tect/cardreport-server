@@ -1,6 +1,6 @@
 [project]
 name = "cardreport-server"
-version = "0.1.0"
+version = "0.2.0"
 description = "Internal HTTP service for CardReport templates and report generation"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -14,6 +14,7 @@ dependencies = [
     "prometheus-client>=0.21,<1",
     "psycopg[binary,pool]>=3.2,<4",
     "pydantic-settings>=2.8,<3",
+    "python-multipart>=0.0.22,<0.1",
     "uvicorn>=0.34,<1",
 ]
 

@@ -32,7 +32,8 @@ only required stateful dependencies. No separate queue broker initially.
 Not included: report editor, SQL execution, source connectors, scheduling, email,
 webhooks, tenant isolation, arbitrary Python/HTML/CSS, plugins, resumable uploads,
 inline templates on generation, synchronous waiting, or a standalone SDK.
-CSV multipart upload is deferred; clients can use CardReport's existing CSV
+Historical initial scope (extended by the [CSV API](user/api.md#csv-input) in 0.2):
+CSV multipart upload was deferred; clients can use CardReport's existing CSV
 adapter to produce the same named-dataset envelope. This does not remove CSV
 support from the library. Both Chromium and the library's experimental SVG/WeasyPrint
 renderer are included in the worker image and selected per job.

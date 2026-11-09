@@ -4,6 +4,7 @@ import os
 import time
 from importlib.metadata import version
 from pathlib import Path
+from typing import IO
 from uuid import uuid4
 
 import httpx
@@ -159,3 +160,70 @@ def test_weasyprint_flow_is_terminal(
             "retryable": False,
         }
         assert client.get(job["content_url"]).status_code == 409
+
+
+@pytest.mark.parametrize("renderer", ["chromium", "weasyprint"])
+@pytest.mark.parametrize("mixed", [False, True])
+def test_csv_report(integration_settings: Settings, renderer: str, mixed: bool) -> None:
+    import json
+    from contextlib import ExitStack
+
+    slug = "csv-e2e-" + uuid4().hex
+    with (
+        httpx.Client(
+            base_url="http://127.0.0.1:" + os.environ["API_PORT"], timeout=150
+        ) as client,
+        ExitStack() as files,
+    ):
+        registered = client.post(
+            f"/v1/templates/{slug}/versions",
+            content=(ROOT / "examples/reference_template.json").read_bytes(),
+            headers={"Content-Type": "application/json"},
+        )
+        assert registered.status_code == 201
+        parts: list[tuple[str, tuple[str, IO[bytes] | str, str]]] = []
+        for path in sorted((ROOT / "examples/reference_csv").glob("*.csv")):
+            if not mixed or path.stem == "summary":
+                parts.append(
+                    (
+                        "files",
+                        (path.name, files.enter_context(path.open("rb")), "text/csv"),
+                    )
+                )
+        if mixed:
+            data = json.loads((ROOT / "examples/reference_data.json").read_text())
+            del data["datasets"]["summary"]
+            parts.append(
+                ("data", ("other.yaml", json.dumps(data), "application/octet-stream"))
+            )
+        response = client.post(
+            "/v1/reports",
+            params={"template_id": slug, "template_version": 1, "renderer": renderer},
+            files=parts,
+        )
+        assert response.status_code == 202, response.text
+        job = response.json()
+        status = wait(client, job["status_url"])
+        assert status["state"] == "succeeded", status
+        pdf = PdfReader(io.BytesIO(client.get(job["content_url"]).content))
+        text = "\n".join(page.extract_text() for page in pdf.pages)
+        assert "21" in text and "Call attempted" in text
+        # Malformed CSV and multipart are terminal validation errors, not retries.
+        invalid_csv = httpx.Request(
+            "POST",
+            "http://test",
+            files=[("files", ("summary.csv", b"clients\nprivate-marker\n"))],
+        )
+        for content, content_type in (
+            (b"broken", "multipart/form-data; boundary=test"),
+            (invalid_csv.read(), invalid_csv.headers["content-type"]),
+        ):
+            bad = client.post(
+                "/v1/reports",
+                params={"template_id": slug},
+                content=content,
+                headers={"Content-Type": content_type},
+            ).json()
+            failed = wait(client, bad["status_url"])
+            assert failed["state"] == "failed" and failed["attempts"] == 1
+            assert failed["error"]["code"] == "invalid_data"  # type: ignore[index]
