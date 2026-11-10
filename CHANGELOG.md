@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.3
+
+- Update CardReport to 0.8.4: WeasyPrint cards without a fixed height now grow
+  with their contents, including standalone tables. Fixed-height layouts retain
+  overflow checks. Templates no longer need fixed-row wrappers for natural cards.
+  Oversized natural tables now report layout overflow instead of a generic render
+  failure.
+- No database migration. Upgrade API and workers together; resubmit previously
+  failed reports to render them with the corrected engine. Existing results and
+  immutable template versions are unchanged.
+
 ## 0.4.2
 
 - Layout failures now show the component path, page, measured dimensions and

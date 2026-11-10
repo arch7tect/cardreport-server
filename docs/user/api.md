@@ -161,9 +161,12 @@ noninteractive charts.
 WeasyPrint has the library's experimental feature subset, including bars, lines and
 funnels. Flow/table splitting is unsupported and ends the job with
 `unsupported_feature` (`retryable=false`), including HTML requests. Template
-registration validates syntax independently of renderer capabilities. With the
-pinned library, a severely oversized dashboard table can produce `render_failed`
-instead of `layout_overflow` on WeasyPrint. Use Chromium flow for table pagination.
+registration validates syntax independently of renderer capabilities. Oversized
+dashboard tables are rejected with `layout_overflow`; use Chromium flow for table
+pagination.
+Cards without a fixed height grow with their contents in both engines, including
+standalone tables. An explicit row height still constrains its cards; automatic
+height does not split a dashboard card across pages or suppress real overflow.
 See the
 [CardReport capability matrix](https://github.com/arch7tect/cardreport/blob/main/docs/user/renderers.md#capabilities).
 

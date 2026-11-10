@@ -85,7 +85,7 @@ forward those four values into containers. Container connections use service DNS
 not host loopback. Customize the manifest itself for external dependencies.
 All other settings use the same prefixed names in native runs and Compose.
 
-CardReport is declared as `>=0.8.2,<0.9`; `uv.lock` fixes the tested exact version.
+CardReport uses the compatible range declared in [pyproject.toml](../../pyproject.toml); `uv.lock` fixes the tested exact version.
 Dependency updates are explicit and require both-engine verification; images use
 `uv sync --locked`, and workers never update packages at startup.
 

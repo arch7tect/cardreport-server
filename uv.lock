@@ -281,7 +281,7 @@ wheels = [
 
 [[package]]
 name = "cardreport"
-version = "0.8.3"
+version = "0.8.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "babel" },
@@ -293,9 +293,9 @@ dependencies = [
     { name = "referencing" },
     { name = "ruamel-yaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/02/49/35be3cc9f7f7ddb0dc2831a109d66646cce8584c4869949c7c643c03c674/cardreport-0.8.3.tar.gz", hash = "sha256:6635de9ab9af8732000379ced0209fc8cecf37d918665b0f5edd690dd7058884", size = 1913078, upload-time = "2026-11-10T18:51:56.109Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/11/ff/d6a04506736174b1f54b4f6001fe08074804a1a7a2735ffc34f0957c6a4c/cardreport-0.8.4.tar.gz", hash = "sha256:ce910f7ffc08f39cd6b544e751c997ab046fb7efbd502c54d95ca9ed0769cc3e", size = 1915944, upload-time = "2026-11-10T20:50:58.82Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ae/10/5ad958bc612d9ee2e985dc5548c6fc4d0d368757ca67270b12c72c5b94d7/cardreport-0.8.3-py3-none-any.whl", hash = "sha256:75a62d141923c6a4edb35e0d97ef53340c35f2d1fad703438fe23fde5aaea81e", size = 805089, upload-time = "2026-11-10T18:51:54.511Z" },
+    { url = "https://files.pythonhosted.org/packages/15/71/ef34c946ce90baec828abdeef02250f93d79a5546696995a8a407a597f39/cardreport-0.8.4-py3-none-any.whl", hash = "sha256:549280eff0ea34838aab9ecfb1fc7876c0ad1c0527bd45cbd67dcf5fd474200c", size = 805185, upload-time = "2026-11-10T20:51:00.568Z" },
 ]
 
 [package.optional-dependencies]
@@ -314,7 +314,7 @@ weasyprint = [
 
 [[package]]
 name = "cardreport-server"
-version = "0.4.2"
+version = "0.4.3"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -346,7 +346,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.15,<2" },
     { name = "boto3", specifier = ">=1.37,<2" },
-    { name = "cardreport", extras = ["pdf", "weasyprint"], specifier = ">=0.8.3,<0.9" },
+    { name = "cardreport", extras = ["pdf", "weasyprint"], specifier = ">=0.8.4,<0.9" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "prometheus-client", specifier = ">=0.21,<1" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2,<4" },

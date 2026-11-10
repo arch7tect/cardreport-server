@@ -241,3 +241,74 @@ def test_csv_report(integration_settings: Settings, renderer: str, mixed: bool) 
                     client.get(bad["status_url"] + "/files/1/content").content
                     == b"clients\nprivate-marker\n"
                 )
+
+
+@pytest.mark.parametrize("renderer", ["chromium", "weasyprint"])
+def test_natural_table_card(integration_settings: Settings, renderer: str) -> None:
+    """A natural table card must fit without a fixed-height wrapper."""
+    slug = "natural-card-" + uuid4().hex
+    template = {
+        "format": "cardreport.template/1",
+        "datasets": {
+            "items": {"cardinality": "many", "fields": {"name": {"type": "text"}}}
+        },
+        "report": {
+            "title": "Natural card regression",
+            "mode": "dashboard",
+            "blocks": [
+                {
+                    "type": "row",
+                    "height_mm": 50,
+                    "children": [
+                        {
+                            "type": "card",
+                            "content": {"type": "text", "text": "Overview"},
+                        }
+                    ],
+                },
+                {
+                    "type": "card",
+                    "title": "Items",
+                    "content": {
+                        "type": "table",
+                        "dataset": "items",
+                        "columns": [{"key": "name", "label": "Item"}],
+                    },
+                },
+                {"type": "text", "text": "Following block"},
+            ],
+        },
+    }
+    labels = [f"ITEM-{i:04d}" for i in range(1, 10)]
+    data = {
+        "format": "cardreport.data/1",
+        "datasets": {
+            "items": {
+                "columns": ["name"],
+                "rows": [{"name": label} for label in labels],
+            }
+        },
+    }
+    with httpx.Client(
+        base_url="http://127.0.0.1:" + os.environ["API_PORT"], timeout=150
+    ) as client:
+        registered = client.post(f"/v1/templates/{slug}/versions", json=template)
+        assert registered.status_code == 201, registered.text
+        submitted = client.post(
+            "/v1/reports",
+            params={"template_id": slug, "renderer": renderer, "output": "pdf"},
+            json=data,
+        )
+        assert submitted.status_code == 202, submitted.text
+        job = submitted.json()
+        status = wait(client, job["status_url"])
+        assert status["state"] == "succeeded", status
+        assert status["engine_version"] == version("cardreport")
+        content = client.get(job["content_url"])
+        assert content.status_code == 200, content.text
+        pdf = PdfReader(io.BytesIO(content.content))
+        assert len(pdf.pages) == 1
+        text = pdf.pages[0].extract_text()
+        for label in labels:
+            assert text.count(label) == 1
+        assert "Following block" in text

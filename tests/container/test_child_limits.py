@@ -21,8 +21,8 @@ pytestmark = pytest.mark.container
         ("size", "weasyprint", "output_too_large"),
         ("overflow", "chromium", "layout_overflow"),
         ("overflow", "weasyprint", "layout_overflow"),
-        # CardReport 0.8.1 wraps a native assertion for this oversized table.
-        ("large_table", "weasyprint", "render_failed"),
+        # An oversized natural table is a layout error, not a renderer crash.
+        ("large_table", "weasyprint", "layout_overflow"),
     ],
 )
 def test_real_child_limits(

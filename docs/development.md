@@ -37,7 +37,8 @@ uv run python scripts/test_integration.py --containers
 
 The harness creates a unique Compose project, test database, bucket and prefix;
 it migrates, runs real integration tests, builds the image, starts API/workers,
-and runs real PDF/HTML with Chromium and WeasyPrint, process-crash and two-worker
+and runs real PDF/HTML with Chromium and WeasyPrint, natural-height table cards
+followed by another block, process-crash and two-worker
 concurrency tests. WeasyPrint flow requests are checked for an explicit terminal
 error; the paginated flow example runs on Chromium. Failure
 retains the isolated stack and logs under local/; success removes only resources
@@ -97,3 +98,5 @@ the remaining UI cases use headless-shell. No extra browser service is needed.
 Stable version bumps on main publish only after both native Linux architecture
 lanes pass. See [release procedure and retry rules](releases.md). Keep the package
 version and `uv.lock` aligned; the tested image is the one uploaded to GHCR.
+
+[Natural card height dependency review](reviews/2026-11-10-natural-card-height.md).
