@@ -46,3 +46,15 @@ def test_csv_multipart_is_only_on_reports(settings: Settings) -> None:
             "content"
         ]
     )
+
+
+def test_layout_diagnostic_schema_is_derived_and_optional(settings: Settings) -> None:
+    schema = create_app(settings).openapi()
+    diagnostic = schema["components"]["schemas"]["LayoutDiagnostic"]
+    assert set(diagnostic["required"]) == {"reason", "path"}
+    assert diagnostic["additionalProperties"] is False
+    assert "label_overlap" in diagnostic["properties"]["reason"]["enum"]
+    status = schema["paths"]["/v1/reports/{report_id}"]["get"]["responses"]["200"][
+        "content"
+    ]["application/json"]["schema"]
+    assert "error" in status["properties"]

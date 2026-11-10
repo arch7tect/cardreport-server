@@ -14,7 +14,16 @@ from cardreport_server.settings import Settings
 
 
 @pytest.mark.parametrize(
-    "case", ["output_limit", "snapshot_limit", "invalid_diagnostics", "success"]
+    "case",
+    [
+        "output_limit",
+        "snapshot_limit",
+        "invalid_diagnostics",
+        "success",
+        "layout_valid",
+        "layout_invalid",
+        "layout_wrong_code",
+    ],
 )
 def test_file_diagnostics_are_advisory_and_survive_failure(
     settings: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
@@ -43,7 +52,22 @@ def test_file_diagnostics_are_advisory_and_survive_failure(
 
     def launch(*args: object, **kwargs: object) -> Mock:
         directory = tmp_path / ("attempt-" + str(attempt.token))
-        (directory / "outcome.json").write_text('{"ok":true}')
+        outcome: dict[str, object] = {"ok": True}
+        if case.startswith("layout_"):
+            outcome = {
+                "code": "layout_overflow"
+                if case != "layout_wrong_code"
+                else "invalid_data",
+                "stage": "render",
+                "message": "safe",
+                "diagnostic": {"reason": "label_overlap", "path": "blocks.0"},
+            }
+            if case == "layout_invalid":
+                outcome["diagnostic"] = {
+                    "reason": "label_overlap",
+                    "path": "PRIVATE_VALUE",
+                }
+        (directory / "outcome.json").write_text(json.dumps(outcome))
         (directory / "result").write_bytes(
             b"x" * (1025 if case == "output_limit" else 1)
         )
@@ -67,7 +91,11 @@ def test_file_diagnostics_are_advisory_and_survive_failure(
     assert finish.call_args.kwargs["files"] == (
         None if case == "invalid_diagnostics" else files
     )
-    if case in {"output_limit", "snapshot_limit"}:
+    if case.startswith("layout_"):
+        error = finish.call_args.kwargs["error"]
+        assert ("diagnostic" in error) == (case == "layout_valid")
+        assert "PRIVATE_VALUE" not in str(error)
+    elif case in {"output_limit", "snapshot_limit"}:
         assert (
             finish.call_args.kwargs["error"]["code"]
             == {

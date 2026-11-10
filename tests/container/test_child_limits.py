@@ -104,3 +104,8 @@ with tempfile.TemporaryDirectory() as tmp:
         assert outcome == {"ok": True}
     else:
         assert outcome["code"] == expected
+        if expected == "layout_overflow":
+            assert outcome["diagnostic"]["path"].startswith(
+                ("blocks.", "pages.", "report")
+            )
+            assert "text" not in outcome["diagnostic"]

@@ -673,3 +673,14 @@ The [development guide](development.md) describes executable checks. The
 [worker-loop review](reviews/2026-11-07-worker-loop.md) and
 [configuration review](reviews/2026-11-07-configuration.md) record verification
 of wakeups, shutdown, ownership handling and configurable budgets.
+
+
+### Layout diagnostic boundary
+
+The library attaches optional structured geometry to layout exceptions. The render
+child exports only the library-validated reason/path/page/box/measurement record;
+the supervisor validates it again before storing the terminal error JSON. Neither
+boundary forwards raw exception text or chart labels. Invalid optional metadata
+is dropped while retaining the layout failure. API and console support old errors
+without a record. No schema migration, re-render on GET or automatic layout changes
+are introduced. Measurements describe current layout, not required new sizes.

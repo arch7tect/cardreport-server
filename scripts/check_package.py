@@ -18,7 +18,7 @@ config = Settings(_env_file=None, database_url='postgresql://u:p@localhost/test'
     s3_bucket='test', s3_prefix='test/')
 client = TestClient(create_app(config))
 assert 'site-packages' in str(Path(cardreport_server.__file__))
-for name in ('', 'app.js', 'common.js', 'templates.js', 'submit.js', 'reports.js', 'console.css'):
+for name in ('', 'app.js', 'common.js', 'templates.js', 'submit.js', 'reports.js', 'layout-diagnostics.js', 'console.css'):
     response = client.get('/ui/' + name)
     assert response.status_code == 200, name
     assert response.headers['cache-control'] == 'no-cache'

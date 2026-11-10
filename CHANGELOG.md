@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.2
+
+- Layout failures now show the component path, page, measured dimensions and
+  directional overflow when supplied by CardReport. The API and console retain
+  generic errors for old jobs and checks without measurements.
+- Diagnostic fields are validated in both child and supervisor; report values and
+  chart label text are not exposed. Hints explain that measured overflow is not
+  a guaranteed resize recommendation.
+- Requires CardReport 0.8.3. No database migration. Upgrade workers to produce new
+  diagnostics; old failed reports are not rerendered automatically.
+
 ## 0.4.1
 
 - Coordinate retention and orphan cleanup across workers with a PostgreSQL advisory

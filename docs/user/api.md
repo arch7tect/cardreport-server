@@ -330,3 +330,39 @@ Metadata lasts at least the configured metadata duration and longer than artifac
 plus download grace. The database retains dataset names and parse results after
 bytes expire; the original-file catalog itself requires the retained upload and
 returns 410 after input expiry.
+
+
+### Layout failure details
+
+A failed report with `error.code = "layout_overflow"` may include an optional
+`error.diagnostic`. It contains no dataset values or label text. For example:
+
+```json
+{
+  "code": "layout_overflow",
+  "stage": "render",
+  "message": "Report content does not fit; adjust the template layout",
+  "retryable": false,
+  "diagnostic": {
+    "reason": "content_overflow",
+    "path": "blocks.2",
+    "page": 1,
+    "box": "content",
+    "available_width_mm": 180,
+    "available_height_mm": 40,
+    "overflow_left_mm": 0,
+    "overflow_top_mm": 0,
+    "overflow_right_mm": 0,
+    "overflow_bottom_mm": 12.5
+  }
+}
+```
+
+These are illustrative measurements. They describe the current layout, **not** a
+promise that adding 12.5 mm fixes the report. Missing fields are unmeasured, not
+zero; old stored errors have no diagnostic. The first failed check is reported,
+and subsequent renders can reveal another constraint. Page is one-based; paths
+are renderer paths (`blocks.0.1.content` means block 0, child 1, card content).
+OpenAPI documents the optional record derived from CardReport's public type.
+See [the library API](https://github.com/arch7tect/cardreport/blob/main/docs/user/api.md#layout-failure-diagnostics)
+for reasons, box meanings and limitations. Raw exception strings stay private.

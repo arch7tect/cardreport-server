@@ -3,8 +3,9 @@
 import json
 from typing import Any, Literal
 
-from cardreport import json_schema
+from cardreport import LayoutDiagnostic, json_schema
 from fastapi import FastAPI
+from pydantic import TypeAdapter
 
 
 def component_schemas(kind: Literal["template", "data"]) -> dict[str, Any]:
@@ -92,4 +93,27 @@ def install_schemas(app: FastAPI) -> None:
     components = schema.setdefault("components", {}).setdefault("schemas", {})
     components.update(component_schemas("template"))
     components.update(component_schemas("data"))
+    diagnostic_schema = TypeAdapter(LayoutDiagnostic).json_schema()
+    diagnostic_schema["additionalProperties"] = False
+    diagnostic_schema["description"] = (
+        "First failed layout check. Optional measurements describe current layout, not a sufficient resize. Contains no report values."
+    )
+    components["LayoutDiagnostic"] = diagnostic_schema
+    status_schema = schema["paths"]["/v1/reports/{report_id}"]["get"]["responses"][
+        "200"
+    ]["content"]["application/json"]["schema"]
+    status_schema["properties"] = {
+        "error": {
+            "anyOf": [
+                {"type": "null"},
+                {
+                    "type": "object",
+                    "properties": {
+                        "diagnostic": {"$ref": "#/components/schemas/LayoutDiagnostic"}
+                    },
+                },
+            ],
+            "description": "Terminal error; layout_overflow may include a diagnostic. Old jobs and unmeasured failures may omit it.",
+        }
+    }
     app.openapi_schema = schema

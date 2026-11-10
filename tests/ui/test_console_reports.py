@@ -568,3 +568,101 @@ def test_accumulating_files_remove_cancel_and_data_view(
     assert set(snapshot) == {"summary", *data.keys()}
     page.get_by_role("button", name="Hide data", exact=True).click()
     expect(page.locator(".data-table")).to_have_count(0)
+
+
+@pytest.mark.parametrize("renderer", ["chromium", "weasyprint"])
+def test_layout_diagnostics_from_real_render(
+    page: Page, api_url: str, renderer: str
+) -> None:
+    slug = "ui-layout-" + uuid4().hex
+    spec = {
+        "format": "cardreport.template/1",
+        "datasets": {
+            "notes": {"cardinality": "one", "fields": {"text": {"type": "text"}}}
+        },
+        "report": {
+            "blocks": [
+                {
+                    "type": "row",
+                    "height_mm": 15,
+                    "children": [
+                        {
+                            "type": "card",
+                            "content": {
+                                "type": "text",
+                                "text": {"bind": {"dataset": "notes", "field": "text"}},
+                            },
+                        }
+                    ],
+                }
+            ]
+        },
+    }
+    data = {
+        "format": "cardreport.data/1",
+        "datasets": {
+            "notes": {
+                "columns": ["text"],
+                "rows": [{"text": "PRIVATE_RENDER_VALUE " * 80}],
+            }
+        },
+    }
+    with httpx.Client(base_url=api_url) as client:
+        client.post(f"/v1/templates/{slug}/versions", json=spec).raise_for_status()
+        response = client.post(
+            "/v1/reports", params={"template_id": slug, "renderer": renderer}, json=data
+        )
+        response.raise_for_status()
+        identifier = response.json()["id"]
+        page.goto(f"/ui/#/reports/{identifier}")
+        expect(page.locator(".badge.failed")).to_be_visible(timeout=120000)
+        error = client.get(f"/v1/reports/{identifier}").json()["error"]
+    assert error["code"] == "layout_overflow"
+    assert error["diagnostic"]["overflow_bottom_mm"] > 0
+    assert error["diagnostic"]["page"] == 1
+    assert "PRIVATE_RENDER_VALUE" not in str(error)
+    panel = page.get_by_role("region", name="Layout diagnostics")
+    expect(panel).to_contain_text("blocks.0")
+    expect(panel).to_contain_text("Available height")
+    expect(panel).to_contain_text("Overflow —")
+    expect(panel).to_contain_text("bottom:")
+    expect(panel).to_contain_text("not the space guaranteed to fix it")
+    expect(panel).not_to_contain_text("PRIVATE_RENDER_VALUE")
+
+
+def test_layout_error_legacy_and_partial_measurements(page: Page, api_url: str) -> None:
+    identifier = str(uuid4())
+    error: dict[str, object] = {"code": "layout_overflow", "message": "Safe old error"}
+    row = {
+        "id": identifier,
+        "state": "failed",
+        "terminal_state": "failed",
+        "template_id": "old",
+        "template_version": 1,
+        "output": "pdf",
+        "renderer": "chromium",
+        "attempts": 1,
+        "retention_seconds": 86400,
+        "error": error,
+    }
+    page.route(f"**/v1/reports/{identifier}", lambda route: route.fulfill(json=row))
+    page.goto(f"/ui/#/reports/{identifier}")
+    expect(
+        page.get_by_text("Safe old error (layout_overflow)", exact=True)
+    ).to_be_visible()
+    expect(page.get_by_role("region", name="Layout diagnostics")).to_have_count(0)
+    error["diagnostic"] = {
+        "reason": "content_overflow",
+        "path": "blocks.0",
+        "box": "padding",
+        "available_height_mm": 40,
+        "overflow_bottom_mm": 12.5,
+    }
+    page.get_by_role("button", name="Refresh status", exact=True).click()
+    panel = page.get_by_role("region", name="Layout diagnostics")
+    expect(panel).to_contain_text("bottom: 12.5 mm")
+    expect(panel).to_contain_text("Other sides were not measured")
+    expect(panel).not_to_contain_text("left: 0.0")
+    error["diagnostic"] = {"reason": "__proto__", "path": "blocks.0"}
+    page.get_by_role("button", name="Refresh status", exact=True).click()
+    expect(panel).to_contain_text("The layout does not fit")

@@ -184,3 +184,18 @@ Browser acceptance uses Playwright Chromium. Desktop and narrow layouts are
 checked; other browser engines are not yet verified. Deploy the console at the
 root-hosted `/ui/` path alongside `/v1`, `/docs` and `/static`. Reverse-proxy
 subpath rewriting is not supported. The UI and Swagger require no external assets.
+
+
+## Understanding layout failures
+
+Failed layout jobs show a **Layout diagnostics** section when the renderer supplied
+a diagnostic: component path, PDF page, available width/height and the sides where
+content exceeds its area. Values are displayed in millimetres. A reason-specific
+hint suggests changing block space, moving content or adjusting chart labels.
+
+The numbers describe current layout; they do not prescribe a guaranteed resize.
+Changing width can rewrap text and changing height can move another block off the
+page. Chart-label collisions may have no dimensions. Unmeasured sides are not zero.
+Old jobs remain readable with their original generic error; refreshing does not
+retroactively measure them. Submit a new report with the upgraded worker to obtain
+new diagnostics. The input files remain downloadable until their retention expires.

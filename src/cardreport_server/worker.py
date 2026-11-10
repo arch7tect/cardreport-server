@@ -26,6 +26,7 @@ from . import jobs
 from .datasets import SNAPSHOT_LIMIT
 from .db import Database
 from .input_files import read_results
+from .layout_diagnostics import validated_diagnostic
 from .render_child import child_environment
 from .settings import Settings
 from .storage import Storage
@@ -162,6 +163,11 @@ class Worker:
                 # A dead parent may leave detached Chromium alive. Only the container is a safe boundary.
                 recycle()
             outcome = json.loads((directory / "outcome.json").read_text())
+            raw_diagnostic = outcome.pop("diagnostic", None)
+            if outcome.get("code") == "layout_overflow":
+                diagnostic = validated_diagnostic(raw_diagnostic)
+                if diagnostic is not None:
+                    outcome["diagnostic"] = diagnostic
             try:
                 files = read_results(directory, attempt.input_type)
             except ValueError:

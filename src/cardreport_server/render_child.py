@@ -29,6 +29,7 @@ from cardreport import (
 
 from .datasets import SNAPSHOT_LIMIT, load_datasets
 from .input_files import FileResult
+from .layout_diagnostics import validated_diagnostic
 
 
 class Cancelled(BaseException):
@@ -108,12 +109,17 @@ def main() -> None:
                     else "Report export validation failed"
                 ),
             }
-    except LayoutOverflowError:
+    except LayoutOverflowError as error:
         outcome = {
             "code": "layout_overflow",
             "stage": "render",
             "message": "Report content does not fit; adjust the template layout",
         }
+        diagnostic = validated_diagnostic(
+            error.diagnostic.to_dict() if error.diagnostic else None
+        )
+        if diagnostic is not None:
+            outcome["diagnostic"] = diagnostic
     except UnsupportedFeatureError:
         outcome = {
             "code": "unsupported_feature",

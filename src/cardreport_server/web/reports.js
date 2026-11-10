@@ -1,3 +1,4 @@
+import {renderLayoutDiagnostic} from './layout-diagnostics.js';
 import {api, APIError, el, field, button, link, heading, notice, message, badge, date, duration, details, select, query, copy} from './common.js';
 
 export async function reports(root, ctx) {
@@ -58,7 +59,7 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
   let accepted = params.get('accepted') === '1';
   const acceptance = notice();
   if (accepted) history.replaceState(null, '', `#/reports/${encodeURIComponent(id)}`);
-  const status = notice(), info = el('div', {class:'panel'}), errorBox = notice();
+  const status = notice(), info = el('div', {class:'panel'}), errorBox = notice(), layoutDetails = el('div');
   const previewArea = el('section', {id:'html-preview', class:'panel', hidden:true});
   const dataArea = el('section', {id:'report-data', class:'panel', hidden:true});
   const showData = button('Show data', toggleData); showData.hidden = true;
@@ -83,7 +84,7 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
   const badgeArea = el('div');
   root.replaceChildren(link('← Reports', '#/reports'), heading('Report details', id, badgeArea), acceptance, status,
     el('div', {class:'toolbar'}, refresh, download, openResult, preview, showData, showFiles, button('Copy link', () => copy(location.href, status)), button('Copy ID', () => copy(id, status))),
-    el('div', {class:'grid'}, el('section', {}, info, errorBox), el('aside', {class:'panel'}, el('h2', {}, 'This run'),
+    el('div', {class:'grid'}, el('section', {}, info, errorBox, layoutDetails), el('aside', {class:'panel'}, el('h2', {}, 'This run'),
       el('div', {class:'actions'}, templateLink, reuse), el('hr', {class:'divider'}), el('p', {class:'muted'}, 'Accepted means the data and job were stored. The worker validates inputs and generates the result.'),
       pdfHint,
       el('p', {class:'muted'}, 'Use these settings starts a new form. You must supply data again. No automatic retry or cancellation is available.'))), dataHint, filesArea, dataArea, previewArea);
@@ -96,6 +97,7 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
     badgeArea.replaceChildren(badge(row.state, row.terminal_state));
     info.replaceChildren(details([['Report ID', el('span', {class:'mono'}, row.id)], ['Template', `${row.template_id} · v${row.template_version}`], ['Renderer / output', `${row.renderer} / ${row.output.toUpperCase()}`], ['Attempts', String(row.attempts)], ['Created', date(row.created_at)], ['Started', date(row.started_at)], ['Finished', date(row.finished_at)], ['Result expires', date(row.result_expires_at)], ['Inputs expire', date(row.input_expires_at)], ['Input retention', duration(row.retention_seconds)], ['Terminal state', row.terminal_state], ['Engine version', row.engine_version], ['Service version', row.service_version], ['Image', el('span', {class:'mono'}, row.image_id || '—')]]));
     message(errorBox, row.error ? `${row.error.message} (${row.error.code})${row.error.id ? ` · Reference ${row.error.id}` : ''}` : '', row.error ? 'error' : '', user);
+    renderLayoutDiagnostic(layoutDetails, row.error?.code === 'layout_overflow' ? row.error.diagnostic : null);
     download.hidden = row.state !== 'succeeded'; preview.hidden = row.state !== 'succeeded' || row.output !== 'html';
     download.textContent = `Download ${row.output.toUpperCase()}`;
     openResult.hidden = row.state !== 'succeeded';

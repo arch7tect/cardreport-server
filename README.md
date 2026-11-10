@@ -29,7 +29,7 @@ authentication: deploy only on a trusted internal network.
 
 ## Run a released image
 
-Use `ghcr.io/arch7tect/cardreport-server:0.4.1` for API, workers and migrations.
+Use `ghcr.io/arch7tect/cardreport-server:0.4.2` for API, workers and migrations.
 The [installation guide](docs/releases.md#install-a-released-image) starts the full
 stack from the published image, without building it locally. For existing services,
 follow the coordinated upgrade procedure before changing images.
@@ -154,6 +154,10 @@ Configure worker slots, retries and timeouts in `.env`; see
 Everything needed for rendering and Swagger is in the app image; no external
 browser assets are fetched. Stop with `docker compose --profile app stop`;
 named volumes retain local data.
+
+Layout failures can include the component path, page and measured overflow in
+millimetres. See [layout error details](docs/user/api.md#layout-failure-details)
+and [the console guide](docs/user/web-console.md#understanding-layout-failures).
 
 ## Documentation
 
