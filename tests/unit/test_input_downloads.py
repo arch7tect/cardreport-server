@@ -14,12 +14,16 @@ from cardreport_server import input_view
 from cardreport_server.errors import APIError
 
 
-@pytest.mark.parametrize("fault", ["size", "hash", "deadline", "expiry", "ok"])
+@pytest.mark.parametrize(
+    "fault", ["size", "hash", "deadline", "expiry", "empty", "oversized_chunk", "ok"]
+)
 def test_input_read_bounds_and_recheck(
     monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
-    raw = b"private original"
+    raw = b"" if fault == "empty" else b"private original"
     body = io.BytesIO(raw)
+    if fault == "oversized_chunk":
+        body.read = Mock(return_value=b"x" * 70000)  # type: ignore[method-assign]
     row = {
         "input_size": len(raw) if fault != "size" else 3,
         "input_hash": hashlib.sha256(raw).hexdigest() if fault != "hash" else "wrong",
@@ -34,13 +38,21 @@ def test_input_read_bounds_and_recheck(
     )
     request = Request({"type": "http", "app": app})
     deadline = time.monotonic() + (100 if fault != "deadline" else -1)
-    if fault == "ok":
+    if fault in {"ok", "empty"}:
         assert input_view._prepare(request, uuid4(), "raw", None, deadline)[0] == raw
         assert lookup.call_count == 2
     else:
         with pytest.raises(APIError) as caught:
             input_view._prepare(request, uuid4(), "raw", None, deadline)
         assert caught.value.status == {"deadline": 504, "expiry": 410}.get(fault, 503)
+        assert caught.value.code == {
+            "deadline": "input_timeout",
+            "expiry": "input_expired",
+        }.get(fault, "input_integrity")
+        assert caught.value.message == {
+            "deadline": "Reading report inputs timed out",
+            "expiry": "Expired",
+        }.get(fault, "Saved input is invalid")
     assert body.closed
 
 

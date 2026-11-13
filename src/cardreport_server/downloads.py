@@ -1,7 +1,7 @@
 """Bounded downloads; headers are sent only for committed, unexpired results."""
 
-from collections.abc import AsyncIterator
-from typing import Literal
+from collections.abc import AsyncIterator, Mapping
+from typing import Literal, cast
 from uuid import UUID
 
 import anyio
@@ -11,12 +11,20 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import StreamingResponse
 from starlette.types import Receive, Scope, Send
 
+from . import dependencies as deps
 from .db import Database
 from .errors import APIError
 
 
 class DownloadResponse(StreamingResponse):
-    def __init__(self, body: StreamingBody, timeout: float, **kwargs: object) -> None:
+    def __init__(
+        self,
+        body: StreamingBody,
+        timeout: float,
+        *,
+        media_type: str | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
         self.object_body = body
         self.timeout = timeout
 
@@ -24,7 +32,7 @@ class DownloadResponse(StreamingResponse):
             while chunk := await run_in_threadpool(body.read, 64 * 1024):
                 yield chunk
 
-        super().__init__(chunks(), **kwargs)  # type: ignore[arg-type]
+        super().__init__(chunks(), media_type=media_type, headers=headers)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         try:
@@ -65,7 +73,7 @@ async def download(
     *,
     artifact: Literal["result", "data"] = "result",
 ) -> DownloadResponse:
-    db: Database = request.app.state.database
+    db: Database = deps.database(request)
 
     def lookup() -> dict[str, object]:
         return artifact_row(db, report_id, artifact)
@@ -85,7 +93,7 @@ async def download(
         # Native PDF viewers have their own isolation; CSP sandbox prevents them loading.
         policy = "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     body = await run_in_threadpool(
-        request.app.state.storage.get, row[artifact + "_key"]
+        deps.storage(request).get, cast(str, row[artifact + "_key"])
     )
     try:
         # Recheck after object open, before headers; collection allows a full download grace.
@@ -93,7 +101,7 @@ async def download(
         output = "json" if artifact == "data" else row["output_kind"]
         return DownloadResponse(
             body,
-            request.app.state.settings.download_timeout,
+            deps.settings(request).download_timeout,
             media_type={
                 "pdf": "application/pdf",
                 "html": "text/html",

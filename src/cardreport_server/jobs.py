@@ -1,20 +1,23 @@
 """Durable report admission, PostgreSQL queue and attempt ownership."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import ceil
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID, uuid4
 
+from psycopg import Connection
+from psycopg.sql import SQL
 from psycopg.types.json import Jsonb
 
 from .db import Database
 from .errors import APIError
 from .history import STATUS_COLUMNS
+from .render_contract import Artifact, Outcome
+from .render_contract import Output as Output
+from .render_contract import RendererName as RendererName
 from .settings import Settings
-
-Output = Literal["pdf", "html"]
-RendererName = Literal["chromium", "weasyprint"]
 
 
 @dataclass(frozen=True)
@@ -24,6 +27,15 @@ class Admission:
     deadline: datetime
     retention: int
     metadata_retention: int
+
+
+def _check_backlog(conn: Connection[dict[str, Any]], limit: int) -> None:
+    count = conn.execute(
+        "SELECT count(*) AS n FROM reports WHERE state IN ('queued','running')"
+    ).fetchone()
+    assert count is not None
+    if count["n"] >= limit:
+        raise APIError(429, "queue_full", "Report queue is at capacity")
 
 
 def admit(
@@ -48,12 +60,7 @@ def admit(
             is None
         ):
             raise APIError(404, "template_not_found", "Template version does not exist")
-        count = conn.execute(
-            "SELECT count(*) AS n FROM reports WHERE state IN ('queued','running')"
-        ).fetchone()
-        assert count is not None
-        if count["n"] >= settings.backlog_limit:
-            raise APIError(429, "queue_full", "Report queue is at capacity")
+        _check_backlog(conn, settings.backlog_limit)
         retention = row["retention_seconds"] or settings.result_retention
         return Admission(
             template_id,
@@ -80,12 +87,7 @@ def enqueue(
     renderer: RendererName = "chromium",
 ) -> None:
     with db.pool.connection() as conn:
-        count = conn.execute(
-            "SELECT count(*) AS n FROM reports WHERE state IN ('queued','running')"
-        ).fetchone()
-        assert count is not None
-        if count["n"] >= settings.backlog_limit:
-            raise APIError(429, "queue_full", "Report queue is at capacity")
+        _check_backlog(conn, settings.backlog_limit)
         result = conn.execute(
             """
             INSERT INTO reports(id,template_id,template_version,input_key,input_type,input_size,input_hash,
@@ -115,7 +117,7 @@ def enqueue(
 def status(db: Database, report_id: UUID) -> dict[str, Any]:
     with db.pool.connection() as conn:
         row = conn.execute(
-            f"SELECT {STATUS_COLUMNS} FROM reports WHERE id=%s",
+            SQL("SELECT {} FROM reports WHERE id=%s").format(STATUS_COLUMNS),
             (report_id,),
         ).fetchone()
     if row is None:
@@ -160,19 +162,19 @@ def claim(db: Database, settings: Settings) -> Attempt | None:
     if row is None:
         return None
     return Attempt(
-        row["id"],
-        token,
-        row["attempt_no"],
-        row["template_id"],
-        row["template_version"],
-        row["input_key"],
-        row["input_type"],
-        row["input_size"],
-        row["input_hash"],
-        row["output_kind"],
-        row["renderer"],
-        row["lease_until"],
-        row["attempt_deadline"],
+        report_id=row["id"],
+        token=token,
+        attempt_no=row["attempt_no"],
+        template_id=row["template_id"],
+        template_version=row["template_version"],
+        input_key=row["input_key"],
+        input_type=row["input_type"],
+        input_size=row["input_size"],
+        input_hash=row["input_hash"],
+        output=row["output_kind"],
+        renderer=row["renderer"],
+        lease_until=row["lease_until"],
+        deadline=row["attempt_deadline"],
     )
 
 
@@ -194,9 +196,9 @@ def finish(
     db: Database,
     attempt: Attempt,
     *,
-    result: dict[str, Any] | None = None,
-    error: dict[str, Any] | None = None,
-    data: dict[str, Any] | None = None,
+    result: Artifact | None = None,
+    error: Outcome | None = None,
+    data: Artifact | None = None,
     files: list[dict[str, Any]] | None = None,
     engine_version: str,
     image_id: str,
@@ -204,8 +206,8 @@ def finish(
 ) -> bool:
     succeeded = result is not None
     state = "succeeded" if succeeded else "failed"
-    result = result or {}
-    data = data or {}
+    result_values: Mapping[str, object] = result or {}
+    data_values: Mapping[str, object] = data or {}
     with db.pool.connection() as conn:
         row = conn.execute(
             """UPDATE reports SET state=%s,terminal_state=%s,finished_at=clock_timestamp(),
@@ -219,12 +221,12 @@ def finish(
             (
                 state,
                 state,
-                result.get("key"),
-                result.get("size"),
-                result.get("hash"),
-                data.get("key"),
-                data.get("size"),
-                data.get("hash"),
+                result_values.get("key"),
+                result_values.get("size"),
+                result_values.get("hash"),
+                data_values.get("key"),
+                data_values.get("size"),
+                data_values.get("hash"),
                 Jsonb(error) if error else None,
                 Jsonb(files) if files is not None else None,
                 succeeded,

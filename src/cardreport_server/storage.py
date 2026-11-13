@@ -1,5 +1,7 @@
 """The small S3 operation set used by the service."""
 
+import hashlib
+import time
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
@@ -72,3 +74,33 @@ class Storage:
         ):
             for item in page.get("Contents", []):
                 yield item["Key"], item["LastModified"]
+
+
+def read_verified(
+    body: StreamingBody,
+    size: int,
+    expected_hash: str,
+    deadline: float,
+    *,
+    integrity: Exception,
+    timeout: Exception,
+) -> bytes:
+    """Read at most the declared size, verify it and always close the object body."""
+    raw = bytearray()
+    digest = hashlib.sha256()
+    try:
+        while True:
+            if time.monotonic() >= deadline:
+                raise timeout
+            chunk = body.read(min(64 * 1024, size + 1 - len(raw)))
+            if not chunk:
+                break
+            if len(raw) + len(chunk) > size:
+                raise integrity
+            raw.extend(chunk)
+            digest.update(chunk)
+    finally:
+        body.close()
+    if len(raw) != size or digest.hexdigest() != expected_hash:
+        raise integrity
+    return bytes(raw)

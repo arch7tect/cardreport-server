@@ -684,3 +684,26 @@ boundary forwards raw exception text or chart labels. Invalid optional metadata
 is dropped while retaining the layout failure. API and console support old errors
 without a record. No schema migration, re-render on GET or automatic layout changes
 are introduced. Measurements describe current layout, not required new sizes.
+
+## Internal code boundaries
+
+The API lifespan creates the database, storage and capacity limiters. Small typed
+accessors in `dependencies.py` retrieve one resource at a time; handlers retain
+their existing FastAPI signatures and response shapes. `slot()` scopes ordinary
+upload and snapshot-view admission. Original-input responses retain a separate
+borrowed slot until sending finishes.
+
+`render_contract.py` describes the owned JSON options, outcome and artifact
+metadata exchanged with the child process. These TypedDicts help static analysis;
+they do not replace validation at trust boundaries. The supervisor still validates
+layout diagnostics before persisting them. Queue admission checks run both before
+and after upload, on their caller's database connection.
+
+`storage.read_verified()` shares bounded reads, SHA-256 verification, deadlines
+and body closure. Callers retain their size policy, public error codes and the
+second database lookup before returning retained data. Streaming result downloads
+keep their existing implementation.
+
+The console's `CursorPages` helper owns cursor history only. Each list owns its
+filters, requests, error messages and stale-response guards; pagination has no
+shared request lifecycle or frontend framework.

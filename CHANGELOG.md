@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+## 0.4.4
+
+- Internal refactoring improves IDE types for application resources and render-process
+  messages, shares bounded storage reads and cursor history, and names attempt fields
+  explicitly. API shapes and queue/retention behavior are unchanged.
+- Resolve PyCharm type warnings for database connections, SQL composition and
+  worker results; retain typed application-resource helpers without redundant casts.
+- Update CardReport to 0.8.5. No database migration or template/data format changes.
+
 ## 0.4.3
 
 - Update CardReport to 0.8.4: WeasyPrint cards without a fixed height now grow

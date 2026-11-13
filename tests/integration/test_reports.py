@@ -114,7 +114,7 @@ def test_snapshot_and_fencing(
     assert not jobs.finish(
         database,
         attempt,
-        result={"key": "stale"},
+        result={"key": "stale", "size": 0, "hash": "unused"},
         engine_version="test",
         image_id="test",
         service_version="test",

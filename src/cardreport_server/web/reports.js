@@ -1,5 +1,5 @@
 import {renderLayoutDiagnostic} from './layout-diagnostics.js';
-import {api, APIError, el, field, button, link, heading, notice, message, badge, date, duration, details, select, query, copy} from './common.js';
+import {CursorPages, api, APIError, el, field, button, link, heading, notice, message, badge, date, duration, details, select, query, copy} from './common.js';
 
 export async function reports(root, ctx) {
   const template = el('input', {placeholder:'All templates', maxLength:64, pattern:'[a-z0-9][a-z0-9_-]{0,63}'});
@@ -17,7 +17,8 @@ export async function reports(root, ctx) {
     el('div', {class:'panel flush'}, el('div', {class:'table-wrap'}, el('table', {},
       el('thead', {}, el('tr', {}, ...['Report', 'Template', 'State', 'Output', 'Created'].map(x => el('th', {}, x)))), body)),
       el('div', {class:'table-footer actions'}, previous, pageLabel, next)));
-  let cursors = [''], page = 0, nextCursor = null, token = 0, applied = {};
+  const pages = new CursorPages();
+  let token = 0, applied = {};
   function timestamp(control) {
     if (!control.value) return '';
     const date = new Date(control.value), parts = control.value.split(/\D/).map(Number);
@@ -25,30 +26,30 @@ export async function reports(root, ctx) {
     if (Number.isNaN(date.getTime()) || parts.some((part, index) => actual[index] !== part)) throw new Error(`Choose a valid local time in ${zone}.`);
     return date.toISOString();
   }
+  /** @param {'reset' | 'next' | 'previous'} direction */
   async function load(direction = 'reset') {
     const request = ++token; previous.disabled = true; next.disabled = true;
     if (direction === 'reset') {
-      page = 0; cursors = ['']; nextCursor = null; body.replaceChildren(); pageLabel.textContent = '';
+      pages.reset(); body.replaceChildren(); pageLabel.textContent = '';
       if (!filters.reportValidity()) return;
       try {
         applied = {template_id:template.value.trim(), state:state.value, created_from:timestamp(from), created_before:timestamp(before)};
         if (applied.created_from && applied.created_before && applied.created_from >= applied.created_before) throw new Error('Created from must be earlier than created before.');
       } catch (error) { message(status, error.message, 'error'); return; }
     }
-    const target = direction === 'next' ? page+1 : direction === 'previous' ? page-1 : 0;
-    const cursor = direction === 'next' ? nextCursor : cursors[target];
+    const target = pages.target(direction);
     try {
-      const data = await api(query('/v1/reports', {...applied, after:cursor, limit:50}), {}, ctx.controller.signal);
+      const data = await api(query('/v1/reports', {...applied, after:target.cursor, limit:50}), {}, ctx.controller.signal);
       if (!ctx.active || request !== token) return;
       body.replaceChildren();
       for (const row of data.items) body.append(el('tr', {}, el('td', {}, link(row.id.slice(0,8), `#/reports/${row.id}`)),
         el('td', {}, link(row.template_id, `#/templates/${row.template_id}?version=${row.template_version}`), el('div', {class:'muted'}, `Version ${row.template_version}`)),
         el('td', {}, badge(row.state, row.terminal_state)), el('td', {}, row.output.toUpperCase(), el('div', {class:'muted'}, row.renderer)), el('td', {}, date(row.created_at))));
-      page = target; cursors = cursors.slice(0, target); cursors.push(cursor); nextCursor = data.next;
-      pageLabel.textContent = `Page ${page+1} · ${data.items.length} reports`;
+      pages.commit(target, data.next);
+      pageLabel.textContent = `Page ${pages.page+1} · ${data.items.length} reports`;
       message(status, data.items.length ? '' : 'No retained reports match these filters.');
     } catch (error) { if (ctx.active && request === token) message(status, `History could not be refreshed. ${error.message}`, 'error'); }
-    finally { if (request === token) { previous.disabled = page === 0; next.disabled = !nextCursor; } }
+    finally { if (request === token) { previous.disabled = pages.page === 0; next.disabled = !pages.next; } }
   }
   filters.addEventListener('submit', event => {event.preventDefault(); load('reset');});
   for (const control of [state, template, from, before]) control.addEventListener('change', () => load('reset'));

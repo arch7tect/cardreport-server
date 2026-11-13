@@ -1,4 +1,4 @@
-import {api, el, field, button, link, heading, notice, message, badge, date, duration, details, select, formats, formatFor, saveText, copy, mutationError, query} from './common.js';
+import {CursorPages, api, el, field, button, link, heading, notice, message, badge, date, duration, details, select, formats, formatFor, saveText, copy, mutationError, query} from './common.js';
 
 export async function templates(root, ctx) {
   const filter = select([['false', 'Active'], ['true', 'Archived'], ['', 'All templates']]);
@@ -14,28 +14,29 @@ export async function templates(root, ctx) {
     el('div', {class:'table-footer actions'}, previous, pageLabel, next));
   root.replaceChildren(heading('Templates', 'Versioned definitions, ready to reuse with fresh data.', link('＋ Create template', '#/create-template', true)),
     filters, status, table);
-  let cursors = [''], page = 0, nextCursor = null, request = 0, applied = {};
+  const pages = new CursorPages();
+  let request = 0, applied = {};
+  /** @param {'reset' | 'next' | 'previous'} direction */
   async function load(direction = 'reset') {
     const token = ++request; previous.disabled = true; next.disabled = true;
     if (direction === 'reset') {
-      page = 0; cursors = ['']; nextCursor = null; body.replaceChildren(); pageLabel.textContent = '';
+      pages.reset(); body.replaceChildren(); pageLabel.textContent = '';
       if (!filters.reportValidity()) return;
       applied = {archived:filter.value, q:search.value.trim()};
     }
-    const target = direction === 'next' ? page+1 : direction === 'previous' ? page-1 : 0;
-    const cursor = direction === 'next' ? nextCursor : cursors[target];
+    const target = pages.target(direction);
     try {
-      const data = await api(query('/v1/templates', {...applied, after:cursor, limit:50}), {}, ctx.controller.signal);
+      const data = await api(query('/v1/templates', {...applied, after:target.cursor, limit:50}), {}, ctx.controller.signal);
       if (!ctx.active || token !== request) return;
       body.replaceChildren();
       for (const row of data.items) body.append(el('tr', {}, el('td', {}, link(row.id, `#/templates/${row.id}`),
         row.title ? el('div', {class:'muted'}, row.title) : null), el('td', {}, badge(row.archived ? 'archived' : 'active')),
         el('td', {}, `v${row.latest_version}`), el('td', {}, date(row.created_at))));
-      page = target; cursors = cursors.slice(0, target); cursors.push(cursor); nextCursor = data.next;
-      pageLabel.textContent = `Page ${page+1} · ${data.items.length} templates`;
+      pages.commit(target, data.next);
+      pageLabel.textContent = `Page ${pages.page+1} · ${data.items.length} templates`;
       message(status, data.items.length ? '' : 'No templates match these filters. Create one or change the filters.');
     } catch (error) { if (ctx.active && token === request) message(status, error.message, 'error'); }
-    finally { if (ctx.active && token === request) { previous.disabled = page === 0; next.disabled = !nextCursor; } }
+    finally { if (ctx.active && token === request) { previous.disabled = pages.page === 0; next.disabled = !pages.next; } }
   }
   filters.addEventListener('submit', event => {event.preventDefault(); load('reset');});
   for (const control of [filter, search]) control.addEventListener('change', () => load('reset'));

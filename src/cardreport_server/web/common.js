@@ -104,3 +104,25 @@ export function query(path, params) {
   const values = new URLSearchParams(Object.entries(params).filter(([,value]) => value !== null && value !== undefined && value !== ''));
   return path + (values.size ? `?${values}` : '');
 }
+
+/** Cursor history only; views own requests, filters and stale-response guards. */
+export class CursorPages {
+  /** @type {Array<string | null>} */
+  cursors = [''];
+  page = 0;
+  /** @type {string | null} */
+  next = null;
+  reset() { this.cursors = ['']; this.page = 0; this.next = null; }
+  /** @param {'reset' | 'next' | 'previous'} direction */
+  target(direction) {
+    const index = direction === 'next' ? this.page+1 : direction === 'previous' ? this.page-1 : 0;
+    return {index, cursor:direction === 'next' ? this.next : this.cursors[index]};
+  }
+  /**
+   * @param {{index:number, cursor:string | null}} target
+   * @param {string | null} next
+   */
+  commit({index, cursor}, next) {
+    this.page = index; this.cursors = this.cursors.slice(0, index); this.cursors.push(cursor); this.next = next;
+  }
+}

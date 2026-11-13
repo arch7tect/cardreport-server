@@ -21,7 +21,9 @@ class Database:
                 f"-c lock_timeout={max(1, int(settings.db_lock_timeout * 1000))}"
             ),
         }
-        self.pool: ConnectionPool[Connection[dict[str, Any]]] = ConnectionPool(
+        self.pool: ConnectionPool[Connection[dict[str, Any]]] = ConnectionPool[
+            Connection[dict[str, Any]]
+        ](
             self._conninfo,
             min_size=0,
             max_size=settings.db_pool_size,
@@ -32,7 +34,7 @@ class Database:
 
     def dedicated_connection(self) -> Connection[dict[str, Any]]:
         """Unpooled session; the caller must close it, including on failure."""
-        return Connection.connect(
+        return Connection[dict[str, Any]].connect(
             self._conninfo,
             row_factory=dict_row,
             autocommit=True,

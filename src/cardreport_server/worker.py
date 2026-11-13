@@ -28,6 +28,7 @@ from .db import Database
 from .input_files import read_results
 from .layout_diagnostics import validated_diagnostic
 from .render_child import child_environment
+from .render_contract import Outcome, RenderOptions
 from .settings import Settings
 from .storage import Storage
 
@@ -48,7 +49,9 @@ class Running:
     def stop(self) -> None:
         self.cancelled.set()
         process = self.process
-        if self.stopped_at is None and process is not None and process.poll() is None:
+        if process is None:
+            return
+        if self.stopped_at is None and process.poll() is None:
             try:
                 process.terminate()
                 self.stopped_at = time.monotonic()
@@ -121,25 +124,22 @@ class Worker:
                     },
                 )
                 return
-            (directory / "options.json").write_text(
-                json.dumps(
-                    {
-                        "input_type": attempt.input_type,
-                        "output": attempt.output,
-                        "renderer": attempt.renderer,
-                        "render_timeout": self.settings.render_timeout,
-                        "render_deadline": running.deadline
-                        - self.settings.cleanup_grace
-                        - self.settings.io_reserve,
-                        "data_limits": {
-                            "max_rows": self.settings.data_max_rows,
-                            "max_cells": self.settings.data_max_cells,
-                            "max_json_bytes": self.settings.input_limit,
-                        },
-                        "output_limit": self.settings.output_limit,
-                    }
-                )
-            )
+            options: RenderOptions = {
+                "input_type": attempt.input_type,
+                "output": attempt.output,
+                "renderer": attempt.renderer,
+                "render_timeout": self.settings.render_timeout,
+                "render_deadline": running.deadline
+                - self.settings.cleanup_grace
+                - self.settings.io_reserve,
+                "data_limits": {
+                    "max_rows": self.settings.data_max_rows,
+                    "max_cells": self.settings.data_max_cells,
+                    "max_json_bytes": self.settings.input_limit,
+                },
+                "output_limit": self.settings.output_limit,
+            }
+            (directory / "options.json").write_text(json.dumps(options))
             process = subprocess.Popen(
                 [
                     sys.executable,
@@ -162,7 +162,7 @@ class Worker:
             if process.returncode != 0 or not (directory / "outcome.json").exists():
                 # A dead parent may leave detached Chromium alive. Only the container is a safe boundary.
                 recycle()
-            outcome = json.loads((directory / "outcome.json").read_text())
+            outcome: Outcome = json.loads((directory / "outcome.json").read_text())
             raw_diagnostic = outcome.pop("diagnostic", None)
             if outcome.get("code") == "layout_overflow":
                 diagnostic = validated_diagnostic(raw_diagnostic)
@@ -296,13 +296,15 @@ class Worker:
     def complete(
         self,
         attempt: jobs.Attempt,
-        error: dict[str, object],
+        error: Outcome,
         files: list[dict[str, object]] | None = None,
     ) -> None:
+        outcome = Outcome(**error)
+        outcome["retryable"] = False
         jobs.finish(
             self.db,
             attempt,
-            error=error | {"retryable": False},
+            error=outcome,
             files=files,
             engine_version=version("cardreport"),
             image_id=self.settings.image_id,
@@ -447,8 +449,9 @@ class Worker:
                                         log.warning(
                                             "Maintenance dependency unavailable"
                                         )
-                                maintenance_future = executor.submit(maintenance)
-                                maintenance_future.add_done_callback(
+                                submitted_maintenance = executor.submit(maintenance)
+                                maintenance_future = submitted_maintenance
+                                submitted_maintenance.add_done_callback(
                                     lambda _: self._wakeups.put(None)
                                 )
                                 next_maintenance = (
@@ -474,11 +477,12 @@ class Worker:
                                         claim_start + self.settings.attempt_timeout,
                                         claim_start + self.settings.lease_seconds,
                                     )
-                                    running.future = executor.submit(
+                                    submitted_report = executor.submit(
                                         self.execute, running
                                     )
+                                    running.future = submitted_report
                                     self.active[str(attempt.token)] = running
-                                    running.future.add_done_callback(
+                                    submitted_report.add_done_callback(
                                         lambda _: self._wakeups.put(None)
                                     )
                                     claimed = True

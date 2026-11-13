@@ -1,5 +1,8 @@
 # Development checks
 
+See the [internal refactoring verification](reviews/2026-11-13-refactoring.md) for
+the latest behavior-preservation checks.
+
 [README](../README.md) · [Local setup](user/local-development.md)
 
 ```sh
@@ -10,6 +13,15 @@ uv run mypy
 uv run pytest tests/unit -q
 uv run python scripts/test_integration.py
 ```
+
+For IDE-reported typing problems, also rerun PyCharm inspections on the changed
+files. The enabled PyCharm MCP server exposes `get_file_problems`; supply the
+explicit project path and include warnings. Passing mypy does not imply identical
+IDE inference. Application-state getters use annotated locals at the dynamic
+Starlette boundary so both tools retain the resource types without redundant casts.
+Keep environment-loading `Settings()` notices and missing IDE SQL data-source
+configuration separate from code defects; do not add fallback credentials or
+disable inspections to hide them.
 
 Integration tests use real PostgreSQL and S3 in a newly named Compose project,
 non-conflicting localhost ports, a test-only database/bucket/prefix, and explicit

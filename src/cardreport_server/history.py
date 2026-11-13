@@ -7,16 +7,18 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
+from psycopg.sql import SQL
+
 from .db import Database
 from .errors import APIError
 
 State = Literal["queued", "running", "succeeded", "failed", "expired"]
-STATUS_COLUMNS = """id,template_id,template_version,state,output_kind AS output,renderer,
+STATUS_COLUMNS = SQL("""id,template_id,template_version,state,output_kind AS output,renderer,
 attempt_no AS attempts,created_at,started_at,finished_at,result_expires_at,
 input_expires_at,input_retention AS retention_seconds,
 (NOT input_deleted AND state!='expired' AND (input_expires_at IS NULL OR input_expires_at>clock_timestamp())) AS inputs_available,
 error,terminal_state,engine_version,image_id,service_version,
-(data_key IS NOT NULL AND NOT result_deleted AND state='succeeded' AND result_expires_at>clock_timestamp()) AS data_available"""
+(data_key IS NOT NULL AND NOT result_deleted AND state='succeeded' AND result_expires_at>clock_timestamp()) AS data_available""")
 
 
 def decode_cursor(value: str) -> tuple[datetime, UUID]:
@@ -71,26 +73,28 @@ def list_reports(
             "invalid_date_range",
             "Created from must be earlier than created before",
         )
-    clauses = []
+    clauses: list[SQL] = []
     params: list[object] = []
     if template_id is not None:
-        clauses.append("template_id=%s")
+        clauses.append(SQL("template_id=%s"))
         params.append(template_id)
     if state is not None:
-        clauses.append("state=%s")
+        clauses.append(SQL("state=%s"))
         params.append(state)
     if created_from is not None:
-        clauses.append("created_at>=%s")
+        clauses.append(SQL("created_at>=%s"))
         params.append(created_from)
     if created_before is not None:
-        clauses.append("created_at<%s")
+        clauses.append(SQL("created_at<%s"))
         params.append(created_before)
     if after is not None:
-        clauses.append("(created_at,id)<(%s,%s)")
+        clauses.append(SQL("(created_at,id)<(%s,%s)"))
         params.extend(decode_cursor(after))
-    where = " WHERE " + " AND ".join(clauses) if clauses else ""
+    where = SQL(" WHERE ") + SQL(" AND ").join(clauses) if clauses else SQL("")
     # Only fixed SQL fragments are composed; every caller value remains a parameter.
-    query = f"SELECT {STATUS_COLUMNS} FROM reports{where} ORDER BY created_at DESC,id DESC LIMIT %s"
+    query = SQL(
+        "SELECT {} FROM reports{} ORDER BY created_at DESC,id DESC LIMIT %s"
+    ).format(STATUS_COLUMNS, where)
     params.append(limit + 1)
     with db.pool.connection() as conn:
         rows = conn.execute(query, params).fetchall()

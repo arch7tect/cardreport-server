@@ -521,3 +521,35 @@ def test_template_search_pages_and_retry(page: Page) -> None:
     expect(page.get_by_label("Show", exact=True)).to_have_value("false")
     expect(page.locator("tbody tr")).to_have_count(50)
     assert "q" not in calls[-1] and "after" not in calls[-1]
+
+
+@pytest.mark.parametrize("resource", ["reports", "templates"])
+def test_list_ignores_older_response(page: Page, resource: str) -> None:
+    pending: list[Route] = []
+    pattern = re.compile(rf"/v1/{resource}(?:\?.*)?$")
+    page.route(pattern, lambda route: pending.append(route))
+    with page.expect_request(pattern):
+        page.goto(f"/ui/#/{resource}")
+    with page.expect_request(pattern):
+        page.get_by_role("button", name="Refresh", exact=True).click()
+    assert len(pending) == 2
+    if resource == "reports":
+        fresh = report(str(uuid4()), "failed")
+        old = report(str(uuid4()), "failed")
+    else:
+        fresh = {
+            "id": "fresh",
+            "title": "Fresh",
+            "archived": False,
+            "latest_version": 1,
+            "created_at": None,
+        }
+        old = {**fresh, "id": "old", "title": "Old"}
+    pending[1].fulfill(json={"items": [fresh], "next": None})
+    expect(page.locator("tbody tr")).to_have_count(1)
+    expected = str(fresh["id"])[:8] if resource == "reports" else "fresh"
+    expect(page.locator("tbody")).to_contain_text(expected)
+    pending[0].fulfill(json={"items": [old], "next": "obsolete"})
+    page.wait_for_load_state("networkidle")
+    expect(page.locator("tbody")).to_contain_text(expected)
+    expect(page.get_by_role("button", name="Next", exact=True)).to_be_disabled()

@@ -1,6 +1,6 @@
 [project]
 name = "cardreport-server"
-version = "0.4.3"
+version = "0.4.4"
 description = "Internal HTTP service for CardReport templates and report generation"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -9,7 +9,7 @@ authors = [{ name = "Oleg Orlov" }]
 dependencies = [
     "alembic>=1.15,<2",
     "boto3>=1.37,<2",
-    "cardreport[pdf,weasyprint]>=0.8.4,<0.9",
+    "cardreport[pdf,weasyprint]>=0.8.5,<0.9",
     "fastapi>=0.115,<1",
     "prometheus-client>=0.21,<1",
     "psycopg[binary,pool]>=3.2,<4",

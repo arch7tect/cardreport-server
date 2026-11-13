@@ -33,7 +33,9 @@ def test_exact_display(value: object, expected: str | None) -> None:
     assert data_view.display_cell(value) == expected
 
 
-@pytest.mark.parametrize("fault", ["size", "hash", "invalid", "deadline", "ok"])
+@pytest.mark.parametrize(
+    "fault", ["size", "hash", "invalid", "deadline", "empty", "oversized_chunk", "ok"]
+)
 def test_snapshot_read_closes_and_verifies(
     monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
@@ -41,9 +43,15 @@ def test_snapshot_read_closes_and_verifies(
         b'{"format":"cardreport.data/1","datasets":{}}' if fault != "invalid" else b"{}"
     )
     body = io.BytesIO(raw)
+    if fault == "oversized_chunk":
+        body.read = Mock(return_value=b"x" * 70000)  # type: ignore[method-assign]
     lookup = Mock(
         return_value={
-            "data_size": len(raw) if fault != "size" else len(raw) - 1,
+            "data_size": 0
+            if fault == "empty"
+            else len(raw)
+            if fault != "size"
+            else len(raw) - 1,
             "data_hash": hashlib.sha256(raw).hexdigest()
             if fault != "hash"
             else "wrong",
@@ -73,4 +81,15 @@ def test_snapshot_read_closes_and_verifies(
         with pytest.raises(APIError) as caught:
             data_view._read_snapshot(Request({"type": "http", "app": app}), uuid4())
         assert caught.value.status == (504 if fault == "deadline" else 503)
-    assert body.closed
+        assert caught.value.code == (
+            "data_timeout" if fault == "deadline" else "data_integrity"
+        )
+        assert caught.value.message == (
+            "Reading report data timed out"
+            if fault == "deadline"
+            else "Saved dataset snapshot is invalid"
+        )
+    if fault == "empty":
+        assert not body.closed  # Rejected before opening storage.
+    else:
+        assert body.closed

@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from botocore.exceptions import ClientError
+from psycopg.sql import SQL, Identifier
 
 if TYPE_CHECKING:
     from mypy_boto3_s3.type_defs import ListObjectsV2RequestTypeDef
@@ -73,7 +74,9 @@ def maintain(db: Database, storage: Storage, settings: Settings) -> None:
                 with db.pool.connection() as conn:
                     # Column names are closed constants, never request values.
                     conn.execute(
-                        f"UPDATE reports SET {role}_deleted=true WHERE id=%s",
+                        SQL("UPDATE reports SET {}=true WHERE id=%s").format(
+                            Identifier(role + "_deleted")
+                        ),
                         (row["id"],),
                     )
     with db.pool.connection() as conn:

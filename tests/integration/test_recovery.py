@@ -69,7 +69,7 @@ def test_concurrent_claims_and_reapers(
     assert not jobs.finish(
         database,
         stale,
-        result={"key": "wrong"},
+        result={"key": "wrong", "size": 0, "hash": "unused"},
         engine_version="x",
         image_id="x",
         service_version="x",
@@ -177,7 +177,7 @@ def test_infrastructure_retry_backoff_cap_and_stale_token(
             assert not jobs.finish(
                 database,
                 old,
-                result={"key": "stale"},
+                result={"key": "stale", "size": 0, "hash": "unused"},
                 engine_version="x",
                 image_id="x",
                 service_version="x",

@@ -13,6 +13,7 @@ from pydantic import AwareDatetime
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
 
+from . import dependencies as deps
 from . import history, jobs
 from .errors import APIError
 from .intake import media_type
@@ -20,6 +21,12 @@ from .openapi import request_schema
 from .templates import ensure_admission
 
 router = APIRouter(prefix="/v1/reports", tags=["Reports"])
+_CONTENT_RESPONSES: dict[int | str, dict[str, Any]] = {
+    200: {"content": {"application/pdf": {}, "text/html": {}}}
+}
+_DATA_RESPONSES: dict[int | str, dict[str, Any]] = {
+    200: {"content": {"application/json": {}}}
+}
 
 
 @router.post("", status_code=202, openapi_extra=request_schema("data"))
@@ -31,16 +38,14 @@ async def submit(
     renderer: jobs.RendererName = "chromium",
 ) -> JSONResponse:
     ensure_admission(request)
-    settings = request.app.state.settings
-    db = request.app.state.database
-    storage = request.app.state.storage
+    settings = deps.settings(request)
+    db = deps.database(request)
+    storage = deps.storage(request)
     kind = media_type(request, settings.input_limit, multipart=True)
-    limiter = request.app.state.upload_limiter
-    try:
-        limiter.acquire_nowait()
-    except anyio.WouldBlock:
-        raise APIError(429, "uploads_busy", "All upload slots are occupied") from None
-    try:
+    limiter = deps.upload_limiter(request)
+    with deps.slot(
+        limiter, APIError(429, "uploads_busy", "All upload slots are occupied")
+    ):
         admission = await run_in_threadpool(
             jobs.admit, db, settings, template_id, template_version
         )
@@ -106,8 +111,6 @@ async def submit(
             status_code=202,
             headers={"Location": location},
         )
-    finally:
-        limiter.release()
 
 
 @router.get("")
@@ -129,7 +132,7 @@ def report_history(
     ] = None,
 ) -> dict[str, Any]:
     return history.list_reports(
-        request.app.state.database,
+        deps.database(request),
         template_id=template_id,
         state=state,
         after=after,
@@ -141,12 +144,12 @@ def report_history(
 
 @router.get("/{report_id}")
 def report_status(report_id: UUID, request: Request) -> dict[str, Any]:
-    return jobs.status(request.app.state.database, report_id)
+    return jobs.status(deps.database(request), report_id)
 
 
 @router.get(
     "/{report_id}/content",
-    responses={200: {"content": {"application/pdf": {}, "text/html": {}}}},
+    responses=_CONTENT_RESPONSES,
 )
 async def report_content(
     report_id: UUID,
@@ -158,7 +161,7 @@ async def report_content(
     return await download(report_id, request, disposition)
 
 
-@router.get("/{report_id}/data", responses={200: {"content": {"application/json": {}}}})
+@router.get("/{report_id}/data", responses=_DATA_RESPONSES)
 async def report_data(report_id: UUID, request: Request) -> Any:
     from .downloads import download
 

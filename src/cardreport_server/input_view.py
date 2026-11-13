@@ -1,11 +1,11 @@
 """Retained originals and bounded investigation bundles, including failed jobs."""
 
-import hashlib
 import io
 import json
 import tempfile
 import time
 import zipfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
@@ -17,14 +17,16 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 from starlette.types import Receive, Scope, Send
 
+from . import dependencies as deps
 from .errors import APIError
 from .input_files import extract_parts
+from .storage import read_verified
 
 router = APIRouter(prefix="/v1/reports", tags=["Reports"])
 
 
 def input_row(request: Request, report_id: UUID) -> dict[str, Any]:
-    with request.app.state.database.pool.connection() as conn:
+    with deps.database(request).pool.connection() as conn:
         row = conn.execute(
             """SELECT r.*, input_expires_at>clock_timestamp() AS available,
             v.definition::text AS template_definition
@@ -55,23 +57,14 @@ def _prepare(
     # Retained uploads remain readable after an operator lowers admission limits.
     if not isinstance(size, int) or not 0 <= size <= DataLimits().max_json_bytes:
         raise APIError(503, "input_integrity", "Saved input is invalid")
-    body = request.app.state.storage.get(row["input_key"])
-    buffer = bytearray()
-    try:
-        while True:
-            check_time()
-            chunk = body.read(min(64 * 1024, size + 1 - len(buffer)))
-            if not chunk:
-                break
-            buffer.extend(chunk)
-            if len(buffer) > size:
-                raise APIError(503, "input_integrity", "Saved input is invalid")
-    finally:
-        body.close()
-    if len(buffer) != size or hashlib.sha256(buffer).hexdigest() != row["input_hash"]:
-        raise APIError(503, "input_integrity", "Saved input is invalid")
-    raw = bytes(buffer)
-    del buffer
+    raw = read_verified(
+        deps.storage(request).get(row["input_key"]),
+        size,
+        row["input_hash"],
+        deadline,
+        integrity=APIError(503, "input_integrity", "Saved input is invalid"),
+        timeout=APIError(504, "input_timeout", "Reading report inputs timed out"),
+    )
     filename = "input.raw"
     payload: bytes | memoryview = raw
     if kind != "raw":
@@ -166,10 +159,11 @@ class InputResponse(Response):
         request: Request,
         borrower: object,
         deadline: float,
-        **kwargs: Any,
-    ):
-        super().__init__(content, **kwargs)
-        self.limiter = request.app.state.data_view_limiter
+        media_type: str | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
+        super().__init__(content, media_type=media_type, headers=headers)
+        self.limiter = deps.data_view_limiter(request)
         self.borrower = borrower
         self.deadline = deadline
 
@@ -187,7 +181,7 @@ async def read_input(
     kind: Literal["raw", "catalog", "file", "zip"],
     index: int | None = None,
 ) -> Response:
-    limiter = request.app.state.data_view_limiter
+    limiter = deps.data_view_limiter(request)
     borrower = object()
     try:
         limiter.acquire_on_behalf_of_nowait(borrower)
@@ -195,7 +189,7 @@ async def read_input(
         raise APIError(
             503, "data_view_busy", "Report data viewers are busy; try again"
         ) from None
-    deadline = time.monotonic() + request.app.state.settings.download_timeout
+    deadline = time.monotonic() + deps.settings(request).download_timeout
     try:
         payload, filename = await run_in_threadpool(
             _prepare, request, report_id, kind, index, deadline

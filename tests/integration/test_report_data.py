@@ -14,6 +14,7 @@ from cardreport_server import jobs
 from cardreport_server.api import create_app
 from cardreport_server.db import Database
 from cardreport_server.maintenance import OrphanSweep, maintain
+from cardreport_server.render_contract import Artifact
 from cardreport_server.settings import Settings
 from cardreport_server.storage import Storage
 from cardreport_server.templates import register
@@ -64,7 +65,11 @@ def test_snapshot_lifecycle(
         result_key = storage.prefix + f"results/{identifier}/{attempt.token}"
         for artifact in (key, result_key):
             storage.put(artifact, path, "application/json")
-        meta = {"key": key, "size": len(raw), "hash": hashlib.sha256(raw).hexdigest()}
+        meta: Artifact = {
+            "key": key,
+            "size": len(raw),
+            "hash": hashlib.sha256(raw).hexdigest(),
+        }
         assert jobs.finish(
             database,
             attempt,
@@ -77,8 +82,8 @@ def test_snapshot_lifecycle(
         assert not jobs.finish(
             database,
             attempt,
-            result={"key": "wrong"},
-            data={"key": "wrong-data"},
+            result={"key": "wrong", "size": 0, "hash": "unused"},
+            data={"key": "wrong-data", "size": 0, "hash": "unused"},
             engine_version="test",
             image_id="test",
             service_version="test",

@@ -169,6 +169,13 @@ def test_retention_is_admission_snapshot(
             client.get(url).json()["effective_retention_seconds"]
             == integration_settings.result_retention
         )
+        response = client.patch(url, json={"archived": False, "retention_seconds": 60})
+        assert response.status_code == 200
+        assert response.json()["archived"] is False
+        assert response.json()["retention_seconds"] == 60
+        stored = client.get(url).json()
+        assert stored["archived"] is False
+        assert stored["effective_retention_seconds"] == 60
 
 
 def test_malformed_original_and_view_limits(

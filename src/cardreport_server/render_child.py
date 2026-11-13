@@ -30,6 +30,7 @@ from cardreport import (
 from .datasets import SNAPSHOT_LIMIT, load_datasets
 from .input_files import FileResult
 from .layout_diagnostics import validated_diagnostic
+from .render_contract import Outcome, RenderOptions
 
 
 class Cancelled(BaseException):
@@ -45,11 +46,11 @@ def cancel(signum: int, frame: object) -> NoReturn:
 def main() -> None:
     signal.signal(signal.SIGTERM, cancel)
     directory = Path(sys.argv[1])
-    outcome: dict[str, object]
+    outcome: Outcome
     stage = "bind"
     files: list[FileResult] = []
     try:
-        options = json.loads((directory / "options.json").read_text())
+        options: RenderOptions = json.loads((directory / "options.json").read_text())
         template = ReportTemplate.from_json((directory / "template.json").read_bytes())
         limits = DataLimits(**options["data_limits"])
         datasets = load_datasets(

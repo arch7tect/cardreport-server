@@ -4,14 +4,15 @@ import hashlib
 from importlib.metadata import version
 from typing import Annotated, Any, Self
 
-import anyio
 from cardreport import Page as ReportPage
 from cardreport import ReportTemplate, TemplateError
 from fastapi import APIRouter, Path, Query, Request
+from psycopg.sql import SQL, Identifier
 from psycopg.types.json import Json
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette.concurrency import run_in_threadpool
 
+from . import dependencies as deps
 from .db import Database
 from .errors import APIError
 from .intake import read_template
@@ -22,7 +23,7 @@ Slug = Annotated[str, Path(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
 
 
 def ensure_admission(request: Request) -> None:
-    if not request.app.state.settings.admission_enabled:
+    if not deps.settings(request).admission_enabled:
         raise APIError(503, "admission_paused", "New work is temporarily paused")
 
 
@@ -76,18 +77,14 @@ def register(db: Database, template_id: str, body: bytes, kind: str) -> dict[str
 )
 async def create_version(template_id: Slug, request: Request) -> dict[str, Any]:
     ensure_admission(request)
-    limiter = request.app.state.upload_limiter
-    try:
-        limiter.acquire_nowait()
-    except anyio.WouldBlock:
-        raise APIError(429, "uploads_busy", "All upload slots are occupied") from None
-    try:
+    limiter = deps.upload_limiter(request)
+    with deps.slot(
+        limiter, APIError(429, "uploads_busy", "All upload slots are occupied")
+    ):
         body, kind = await read_template(request)
         return await run_in_threadpool(
-            register, request.app.state.database, template_id, body, kind
+            register, deps.database(request), template_id, body, kind
         )
-    finally:
-        limiter.release()
 
 
 @router.get("")
@@ -105,7 +102,7 @@ def list_templates(
     ] = "",
 ) -> dict[str, Any]:
     search = q.strip()
-    with request.app.state.database.pool.connection() as conn:
+    with deps.database(request).pool.connection() as conn:
         rows = conn.execute(
             "SELECT t.*, v.definition->'report'->>'title' AS title "
             "FROM templates t JOIN template_versions v "
@@ -124,7 +121,7 @@ def list_templates(
 
 @router.get("/{template_id}")
 def get_template(template_id: Slug, request: Request) -> dict[str, Any]:
-    with request.app.state.database.pool.connection() as conn:
+    with deps.database(request).pool.connection() as conn:
         row = conn.execute(
             "SELECT * FROM templates WHERE id=%s", (template_id,)
         ).fetchone()
@@ -132,7 +129,7 @@ def get_template(template_id: Slug, request: Request) -> dict[str, Any]:
         raise APIError(404, "template_not_found", "Template does not exist")
     return dict(row) | {
         "effective_retention_seconds": row["retention_seconds"]
-        or request.app.state.settings.result_retention
+        or deps.settings(request).result_retention
     }
 
 
@@ -144,7 +141,7 @@ def list_versions(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> dict[str, Any]:
     get_template(template_id, request)
-    with request.app.state.database.pool.connection() as conn:
+    with deps.database(request).pool.connection() as conn:
         rows = conn.execute(
             "SELECT template_id,version,digest,validated_with,created_at "
             "FROM template_versions WHERE template_id=%s AND version>%s "
@@ -161,7 +158,7 @@ def list_versions(
 def get_version(
     template_id: Slug, revision: Annotated[int, Path(ge=1)], request: Request
 ) -> dict[str, Any]:
-    with request.app.state.database.pool.connection() as conn:
+    with deps.database(request).pool.connection() as conn:
         row = conn.execute(
             "SELECT * FROM template_versions WHERE template_id=%s AND version=%s",
             (template_id, revision),
@@ -202,15 +199,17 @@ def update_template(
         for name in ("archived", "retention_seconds")
         if name in change.model_fields_set
     ]
-    assignments = ",".join(name + "=%s" for name in fields)
-    with request.app.state.database.pool.connection() as conn:
+    assignments = SQL(",").join(
+        SQL("{}=%s").format(Identifier(name)) for name in fields
+    )
+    with deps.database(request).pool.connection() as conn:
         row = conn.execute(
-            f"UPDATE templates SET {assignments} WHERE id=%s RETURNING *",
+            SQL("UPDATE templates SET {} WHERE id=%s RETURNING *").format(assignments),
             (*[getattr(change, name) for name in fields], template_id),
         ).fetchone()
     if row is None:
         raise APIError(404, "template_not_found", "Template does not exist")
     return dict(row) | {
         "effective_retention_seconds": row["retention_seconds"]
-        or request.app.state.settings.result_retention
+        or deps.settings(request).result_retention
     }
