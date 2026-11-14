@@ -376,6 +376,10 @@ for reasons, box meanings and limitations. Raw exception strings stay private.
 A stored template can contain `"Daily report for {{ datasets.summary.report_date }}"`.
 Declare `summary` as `cardinality: one` and `report_date` as `type: date`. Report
 formatting supplies the default; `| date('MMMM yyyy')` overrides a date's display.
+Use `| datetime('dd.MM.yyyy HH:mm XXX')` for a timestamp. Set template
+`report.timezone: Asia/Nicosia` to convert all datetime display, including charts.
+If omitted, input offsets are preserved. Timestamps without offsets mean UTC;
+calendar dates never shift. This is template presentation, not a submission parameter.
 The server delegates interpretation to CardReport during validation and binding;
 no new endpoint, request parameter or data format is required.
 
@@ -384,6 +388,8 @@ Register [daily_template.yaml](../../examples/daily_template.yaml) once, then se
 [daily_data.json](../../examples/daily_data.json) or
 [summary.csv](../../examples/daily_csv/summary.csv) with the next day's values.
 A [JSON template](../../examples/daily_template.json) is equivalent.
+The example keeps the calendar date `14.11.2026` and displays input
+`created_at: 2026-11-14T22:30:00Z` as `Updated 15.11.2026 00:30 +02:00`.
 
 ```sh
 curl --fail-with-body -X POST http://127.0.0.1:18000/v1/templates/daily/versions \

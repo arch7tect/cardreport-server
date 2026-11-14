@@ -669,6 +669,9 @@ def test_layout_error_legacy_and_partial_measurements(page: Page, api_url: str) 
 
 
 def test_daily_csv_substitutions(page: Page, api_url: str) -> None:
+    page.context.new_cdp_session(page).send(
+        "Emulation.setTimezoneOverride", {"timezoneId": "America/Los_Angeles"}
+    )
     slug = register_example(api_url, "daily")
     page.goto(f"/ui/#/new-report?template={slug}&version=1")
     page.get_by_label("Output", exact=True).select_option("html")
@@ -681,6 +684,9 @@ def test_daily_csv_substitutions(page: Page, api_url: str) -> None:
     expect(frame.get_by_text("Daily report for 14.11.2026", exact=True)).to_be_visible()
     expect(frame.get_by_text("Month: November 2026", exact=True)).to_be_visible()
     expect(frame.get_by_text("Automation: 97.6%", exact=True)).to_be_visible()
+    expect(
+        frame.get_by_text("Updated 15.11.2026 00:30 +02:00", exact=True)
+    ).to_be_visible()
     identifier = page.url.split("#/reports/")[1].split("?")[0]
     with httpx.Client(base_url=api_url) as client:
         assert (

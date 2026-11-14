@@ -29,7 +29,7 @@ authentication: deploy only on a trusted internal network.
 
 ## Run a released image
 
-Use `ghcr.io/arch7tect/cardreport-server:0.5.0` for API, workers and migrations.
+Use `ghcr.io/arch7tect/cardreport-server:0.5.1` for API, workers and migrations.
 The [installation guide](docs/releases.md#install-a-released-image) starts the full
 stack from the published image, without building it locally. For existing services,
 follow the coordinated upgrade procedure before changing images.
@@ -90,6 +90,8 @@ Daily headings can use `{{ datasets.summary.report_date }}` in stored templates.
 The library formats typed dates and numbers using report settings; the same template
 works with JSON, YAML or CSV uploads. See the [daily report recipe](docs/user/api.md#daily-report-text)
 and [web console instructions](docs/user/web-console.md#daily-report-text).
+Templates can set `report.timezone` and use `| datetime(...)` for local timestamp
+display; input offsets are preserved by default and missing offsets mean UTC.
 
 ## Submit data files with curl
 

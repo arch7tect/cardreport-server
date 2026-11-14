@@ -92,6 +92,7 @@ def test_complete_report(
                 assert "Daily report for 14.11.2026" in text
                 assert "Month: November 2026" in text
                 assert "97.6%" in text
+                assert "Updated 15.11.2026 00:30 +02:00" in text
             if name == "flow":
                 assert len(pdf.pages) >= 3
                 for i in range(1, 151):
@@ -101,6 +102,7 @@ def test_complete_report(
             if name == "daily":
                 assert "Daily report for 14.11.2026" in content.text
                 assert "{{ datasets." not in content.text
+                assert "Updated 15.11.2026 00:30 +02:00" in content.text
             if renderer == "weasyprint":
                 assert "<svg" in content.text and "<script" not in content.text
 

@@ -209,7 +209,14 @@ inherit the report formatting. From that template, create a report and add
 [summary.csv](../../examples/daily_csv/summary.csv) in **Data files** (or use the
 [JSON](../../examples/daily_data.json) or [YAML](../../examples/daily_data.yaml) dataset).
 Choose HTML for an embedded preview, or PDF with either renderer. The result shows
-`Daily report for 14.11.2026`, `Month: November 2026` and `Automation: 97.6%`.
+`Daily report for 14.11.2026`, `Month: November 2026`, `Automation: 97.6%` and
+`Updated 15.11.2026 00:30 +02:00`. The template selects `timezone: Asia/Nicosia`
+and formats `created_at` with `| datetime(...)`: the UTC timestamp crosses
+midnight locally, while the separate calendar date stays unchanged.
+
+Edit `report.timezone` in the template source to select another display zone.
+Omit it to preserve input offsets. Timestamps without offsets always mean UTC;
+the browser timezone does not affect generated reports.
 
 For the next day, change the input date and submit another report using the same
 template version. Template editing/history shows the source expressions; preview

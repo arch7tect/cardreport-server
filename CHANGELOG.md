@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.5.1
+
+- Upgrade CardReport to 0.9.1 for consistent report timezone display and the
+  `datetime` text filter across both rendering engines.
+- Preserve supplied timestamp offsets by default; timestamps without an offset
+  mean UTC. Templates can select `report.timezone`; calendar dates never shift.
+- Extend the daily JSON/YAML/CSV example and console recipe with a timestamp
+  converted to local time. No endpoint or database migration changes.
+
 ## 0.5.0
 
 - Use CardReport 0.9 for Jinja text substitutions in stored JSON/YAML templates.

@@ -226,6 +226,15 @@ def test_text_substitution_registration(integration_settings: Settings) -> None:
         assert client.post(route, json=spec).status_code == 201
         saved = client.get(route + "/1").json()["definition"]
         assert saved == spec
+        assert saved["report"]["timezone"] == "Asia/Nicosia"
+        invalid_zone = json.loads(source)
+        invalid_zone["report"]["timezone"] = "No/Such_Zone"
+        rejected_zone = client.post(route, json=invalid_zone)
+        assert rejected_zone.status_code == 422
+        assert (
+            rejected_zone.json()["error"]["location"]["template_path"]
+            == "report.timezone"
+        )
         rows = client.get("/v1/templates", params={"q": slug}).json()["items"]
         assert rows[0]["title"] == spec["report"]["title"]
         spec["report"]["title"] = "{{ datasets.summary.missing }}"

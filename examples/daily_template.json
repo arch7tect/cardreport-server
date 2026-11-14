@@ -12,6 +12,9 @@
         },
         "rate": {
           "type": "number"
+        },
+        "created_at": {
+          "type": "datetime"
         }
       }
     }
@@ -38,9 +41,10 @@
             }
           },
           "format": "integer",
-          "note": "Updated {{ datasets.summary.report_date }}"
+          "note": "Updated {{ datasets.summary.created_at | datetime('dd.MM.yyyy HH:mm XXX') }}"
         }
       }
-    ]
+    ],
+    "timezone": "Asia/Nicosia"
   }
 }

@@ -13,10 +13,10 @@ service's release process.
 For a **fresh local installation**, clone the matching tag and use its Compose file:
 
 ```sh
-git clone --branch v0.5.0 https://github.com/arch7tect/cardreport-server.git
+git clone --branch v0.5.1 https://github.com/arch7tect/cardreport-server.git
 cd cardreport-server
 cp .env.example .env  # First setup only; preserve an existing .env.
-export CARDREPORT_SERVER_IMAGE=ghcr.io/arch7tect/cardreport-server:0.5.0
+export CARDREPORT_SERVER_IMAGE=ghcr.io/arch7tect/cardreport-server:0.5.1
 export CARDREPORT_IMAGE_ID="$CARDREPORT_SERVER_IMAGE"
 docker compose --profile app pull migrate api worker
 docker compose up -d --wait postgres s3

@@ -9,6 +9,8 @@ datasets:
         type: integer
       rate:
         type: number
+      created_at:
+        type: datetime
 report:
   language: en
   formatting:
@@ -18,7 +20,7 @@ report:
   subtitle: 'Automation: {{ datasets.summary.rate | percent }}'
   blocks:
   - type: card
-    title: 'Month: {{ datasets.summary.report_date | date(''MMMM yyyy'') }}'
+    title: "Month: {{ datasets.summary.report_date | date('MMMM yyyy') }}"
     content:
       type: kpi
       label: Total calls
@@ -27,4 +29,5 @@ report:
           dataset: summary
           field: total
       format: integer
-      note: Updated {{ datasets.summary.report_date }}
+      note: Updated {{ datasets.summary.created_at | datetime('dd.MM.yyyy HH:mm XXX') }}
+  timezone: Asia/Nicosia

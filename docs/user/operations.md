@@ -356,3 +356,15 @@ have meaning. Literal delimiters need raw escaping as described in the
 Create a new template revision when editing; do not rewrite stored history. No DB
 migration is added for this feature. Upgrade API and workers together using the
 existing coordinated procedure.
+
+
+### Timestamp display upgrade
+
+CardReport 0.9.1 preserves input offsets by default instead of forcing UTC.
+Use template `report.timezone: UTC` if UTC display is required. A new immutable
+version is needed to change an existing template; the service never rewrites old
+versions. Datetimes without offsets now mean UTC and normalized snapshots add
+`+00:00`; original uploaded files remain byte-identical. Calendar dates are unchanged.
+Timezone conversion affects rendered output only, not stored instants or server
+job/retention timestamps. API and workers must use the same upgraded image;
+no database revision change is required for this hotfix.
