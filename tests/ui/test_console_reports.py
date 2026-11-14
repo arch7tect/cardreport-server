@@ -666,3 +666,24 @@ def test_layout_error_legacy_and_partial_measurements(page: Page, api_url: str) 
     error["diagnostic"] = {"reason": "__proto__", "path": "blocks.0"}
     page.get_by_role("button", name="Refresh status", exact=True).click()
     expect(panel).to_contain_text("The layout does not fit")
+
+
+def test_daily_csv_substitutions(page: Page, api_url: str) -> None:
+    slug = register_example(api_url, "daily")
+    page.goto(f"/ui/#/new-report?template={slug}&version=1")
+    page.get_by_label("Output", exact=True).select_option("html")
+    source = ROOT / "examples/daily_csv/summary.csv"
+    page.get_by_label("Data files", exact=True).set_input_files(source)
+    page.get_by_role("button", name="Generate report", exact=True).click()
+    expect(page.locator(".badge.succeeded")).to_be_visible(timeout=180000)
+    page.get_by_role("button", name="Preview HTML", exact=True).click()
+    frame = page.frame_locator('iframe[title="Report preview"]')
+    expect(frame.get_by_text("Daily report for 14.11.2026", exact=True)).to_be_visible()
+    expect(frame.get_by_text("Month: November 2026", exact=True)).to_be_visible()
+    expect(frame.get_by_text("Automation: 97.6%", exact=True)).to_be_visible()
+    identifier = page.url.split("#/reports/")[1].split("?")[0]
+    with httpx.Client(base_url=api_url) as client:
+        assert (
+            client.get(f"/v1/reports/{identifier}/files/1/content").content
+            == source.read_bytes()
+        )

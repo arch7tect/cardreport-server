@@ -369,3 +369,37 @@ are renderer paths (`blocks.0.1.content` means block 0, child 1, card content).
 OpenAPI documents the optional record derived from CardReport's public type.
 See [the library API](https://github.com/arch7tect/cardreport/blob/main/docs/user/api.md#layout-failure-diagnostics)
 for reasons, box meanings and limitations. Raw exception strings stay private.
+
+
+## Daily report text
+
+A stored template can contain `"Daily report for {{ datasets.summary.report_date }}"`.
+Declare `summary` as `cardinality: one` and `report_date` as `type: date`. Report
+formatting supplies the default; `| date('MMMM yyyy')` overrides a date's display.
+The server delegates interpretation to CardReport during validation and binding;
+no new endpoint, request parameter or data format is required.
+
+Register [daily_template.yaml](../../examples/daily_template.yaml) once, then send
+[daily_data.yaml](../../examples/daily_data.yaml),
+[daily_data.json](../../examples/daily_data.json) or
+[summary.csv](../../examples/daily_csv/summary.csv) with the next day's values.
+A [JSON template](../../examples/daily_template.json) is equivalent.
+
+```sh
+curl --fail-with-body -X POST http://127.0.0.1:18000/v1/templates/daily/versions \
+  -H 'Content-Type: application/yaml' --data-binary @examples/daily_template.yaml
+curl --fail-with-body -X POST \
+  'http://127.0.0.1:18000/v1/reports?template_id=daily&template_version=1&output=pdf&renderer=chromium' \
+  -F 'files=@examples/daily_csv/summary.csv;type=text/csv'
+```
+
+Follow the returned status/content URLs as usual. Both renderers support the text
+substitutions. Original uploaded files and normalized data keep data values, not
+rendered titles; the stored template keeps the source expression. Template list
+search/display uses that source title, since it has no report datasets to bind.
+
+Unsupported expressions or undeclared fields return `422 invalid_template` with
+`location.template_path`. Bound-data validation failures use the existing terminal
+`invalid_data` job error. See the library's
+[text contract](https://github.com/arch7tect/cardreport/blob/main/docs/user/templates.md#text-substitutions)
+for supported positions, filters, null handling and escaping.

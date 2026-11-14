@@ -199,3 +199,20 @@ page. Chart-label collisions may have no dimensions. Unmeasured sides are not ze
 Old jobs remain readable with their original generic error; refreshing does not
 retroactively measure them. Submit a new report with the upgraded worker to obtain
 new diagnostics. The input files remain downloadable until their retention expires.
+
+
+## Daily report text
+
+Import [daily_template.yaml](../../examples/daily_template.yaml) on **Create template**
+and save it. Its title uses `{{ datasets.summary.report_date }}`; dates and numbers
+inherit the report formatting. From that template, create a report and add
+[summary.csv](../../examples/daily_csv/summary.csv) in **Data files** (or use the
+[JSON](../../examples/daily_data.json) or [YAML](../../examples/daily_data.yaml) dataset).
+Choose HTML for an embedded preview, or PDF with either renderer. The result shows
+`Daily report for 14.11.2026`, `Month: November 2026` and `Automation: 97.6%`.
+
+For the next day, change the input date and submit another report using the same
+template version. Template editing/history shows the source expressions; preview
+and downloaded output show substituted values. The existing input-file download
+and normalized data view remain available for investigation. See the
+[API recipe](api.md#daily-report-text) for automated submissions.

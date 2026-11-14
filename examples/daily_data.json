@@ -1,0 +1,22 @@
+{
+  "format": "cardreport.data/1",
+  "datasets": {
+    "summary": {
+      "columns": [
+        "report_date",
+        "total",
+        "rate"
+      ],
+      "rows": [
+        {
+          "report_date": {
+            "$type": "date",
+            "value": "2026-11-14"
+          },
+          "total": 12540,
+          "rate": 0.976
+        }
+      ]
+    }
+  }
+}

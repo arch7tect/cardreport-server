@@ -43,6 +43,15 @@ def main() -> None:
             template = ReportTemplate.from_yaml(template_path.read_bytes())
             datasets = datasets_from_yaml(data_path.read_bytes())
         template.bind(datasets).to_html()
+    daily = ReportTemplate.from_yaml(
+        (ROOT / "examples/daily_template.yaml").read_bytes()
+    )
+    daily_data = {
+        "summary": from_csv(
+            ROOT / "examples/daily_csv/summary.csv", schema=daily.datasets["summary"]
+        )
+    }
+    assert daily.bind(daily_data).title == "Daily report for 14.11.2026"
     reference = ReportTemplate.from_json(
         (ROOT / "examples/reference_template.json").read_bytes()
     )

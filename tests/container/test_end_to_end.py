@@ -37,6 +37,9 @@ def wait(client: httpx.Client, url: str) -> dict[str, object]:
         ("flow", "json", "pdf", "chromium"),
         ("reference", "json", "pdf", "weasyprint"),
         ("reference", "yaml", "html", "weasyprint"),
+        ("daily", "json", "pdf", "chromium"),
+        ("daily", "yaml", "pdf", "weasyprint"),
+        ("daily", "yaml", "html", "chromium"),
     ],
 )
 def test_complete_report(
@@ -85,12 +88,19 @@ def test_complete_report(
             pdf = PdfReader(io.BytesIO(content.content))
             text = "\n".join(page.extract_text() for page in pdf.pages)
             assert text.strip()
+            if name == "daily":
+                assert "Daily report for 14.11.2026" in text
+                assert "Month: November 2026" in text
+                assert "97.6%" in text
             if name == "flow":
                 assert len(pdf.pages) >= 3
                 for i in range(1, 151):
                     assert text.count(f"ITEM-{i:04d}") == 1
         else:
             assert "<html" in content.text.lower()
+            if name == "daily":
+                assert "Daily report for 14.11.2026" in content.text
+                assert "{{ datasets." not in content.text
             if renderer == "weasyprint":
                 assert "<svg" in content.text and "<script" not in content.text
 

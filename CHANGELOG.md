@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.5.0
+
+- Use CardReport 0.9 for Jinja text substitutions in stored JSON/YAML templates.
+  Dates and numbers inherit report formatting; daily headings no longer require
+  complete strings in the input datasets. Both renderers and all input formats
+  use the same binding behavior.
+- Add daily JSON/YAML templates and data plus a CSV example, with API and web
+  console recipes and end-to-end coverage.
+- Upgrade note: literal Jinja delimiters in the six supported display-text fields
+  now need escaping. Revalidate stored templates and upgrade API/workers together;
+  no database migration is required.
+
+
 ## 0.4.4
 
 - Internal refactoring improves IDE types for application resources and render-process

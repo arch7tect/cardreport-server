@@ -211,3 +211,24 @@ def test_template_search_and_pagination(
         assert matches(prefix + " missing") == []
         assert matches(ids[0].upper()) == ids[:1]
         assert client.get("/v1/templates", params={"q": "x" * 201}).status_code == 422
+
+
+def test_text_substitution_registration(integration_settings: Settings) -> None:
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[2] / "examples/daily_template.json"
+    ).read_text()
+    spec = json.loads(source)
+    slug = "daily-" + uuid4().hex
+    with TestClient(create_app(integration_settings)) as client:
+        route = f"/v1/templates/{slug}/versions"
+        assert client.post(route, json=spec).status_code == 201
+        saved = client.get(route + "/1").json()["definition"]
+        assert saved == spec
+        rows = client.get("/v1/templates", params={"q": slug}).json()["items"]
+        assert rows[0]["title"] == spec["report"]["title"]
+        spec["report"]["title"] = "{{ datasets.summary.missing }}"
+        rejected = client.post(route, json=spec)
+        assert rejected.status_code == 422
+        assert rejected.json()["error"]["location"]["template_path"] == "report.title"

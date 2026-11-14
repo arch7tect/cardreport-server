@@ -29,7 +29,7 @@ authentication: deploy only on a trusted internal network.
 
 ## Run a released image
 
-Use `ghcr.io/arch7tect/cardreport-server:0.4.4` for API, workers and migrations.
+Use `ghcr.io/arch7tect/cardreport-server:0.5.0` for API, workers and migrations.
 The [installation guide](docs/releases.md#install-a-released-image) starts the full
 stack from the published image, without building it locally. For existing services,
 follow the coordinated upgrade procedure before changing images.
@@ -85,6 +85,11 @@ For production integrations, register templates separately and pin their version
 when submitting `POST /v1/reports`. HTTP 202 confirms durable acceptance, not data
 validation or successful rendering. Do not automatically repeat an upload after an
 uncertain response: it can create a duplicate job.
+
+Daily headings can use `{{ datasets.summary.report_date }}` in stored templates.
+The library formats typed dates and numbers using report settings; the same template
+works with JSON, YAML or CSV uploads. See the [daily report recipe](docs/user/api.md#daily-report-text)
+and [web console instructions](docs/user/web-console.md#daily-report-text).
 
 ## Submit data files with curl
 

@@ -339,3 +339,20 @@ raising slots requires raising the pod memory/scratch limits accordingly. A reta
 32 MiB archive buffer holds its slot until delivery completes. The limiter stays held until download delivery ends;
 read/preparation/delivery share one download deadline (socket reads remain bounded by
 I/O timeouts). Lower admission limits do not prevent reading earlier retained uploads.
+
+
+### Text substitution upgrade compatibility
+
+When upgrading to the release using CardReport 0.9, revalidate stored templates
+before resuming admission. For each revision still used by callers (including
+pinned older revisions), GET `/v1/templates/{id}/versions/{version}` and pass its
+`definition` to `ReportTemplate.from_dict()` using the target CardReport version.
+This is a read-only check; follow paginated template/version lists to cover the
+required revisions. A `TemplateError.template_path` identifies what needs editing.
+`cardreport.template/1` remains unchanged, but Jinja
+delimiters in report title/subtitle, card title, Text content and KPI label/note now
+have meaning. Literal delimiters need raw escaping as described in the
+[library contract](https://github.com/arch7tect/cardreport/blob/main/docs/user/templates.md#text-substitutions).
+Create a new template revision when editing; do not rewrite stored history. No DB
+migration is added for this feature. Upgrade API and workers together using the
+existing coordinated procedure.

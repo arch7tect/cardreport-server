@@ -707,3 +707,12 @@ keep their existing implementation.
 The console's `CursorPages` helper owns cursor history only. Each list owns its
 filters, requests, error messages and stale-response guards; pagination has no
 shared request lifecycle or frontend framework.
+
+
+### Template text binding
+
+Dynamic display strings are interpreted by CardReport during template validation
+and report binding. The service stores their source unchanged and passes typed
+named datasets through its existing pipeline. There is no server-side Jinja
+interpreter, additional transport or schema copy. List/search operates on source
+titles; actual dates and other substitutions appear only in generated reports.

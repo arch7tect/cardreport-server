@@ -1,0 +1,30 @@
+format: cardreport.template/1
+datasets:
+  summary:
+    cardinality: one
+    fields:
+      report_date:
+        type: date
+      total:
+        type: integer
+      rate:
+        type: number
+report:
+  language: en
+  formatting:
+    date_format: dd.MM.yyyy
+    group: space
+  title: Daily report for {{ datasets.summary.report_date }}
+  subtitle: 'Automation: {{ datasets.summary.rate | percent }}'
+  blocks:
+  - type: card
+    title: 'Month: {{ datasets.summary.report_date | date(''MMMM yyyy'') }}'
+    content:
+      type: kpi
+      label: Total calls
+      value:
+        bind:
+          dataset: summary
+          field: total
+      format: integer
+      note: Updated {{ datasets.summary.report_date }}
