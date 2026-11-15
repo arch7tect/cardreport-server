@@ -4,9 +4,12 @@ from pathlib import Path
 from typing import Self
 from urllib.parse import urlsplit
 
+from cardreport import DataLimits, ReportLimits
 from psycopg.conninfo import conninfo_to_dict
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from .limits import ResourceLimits
 
 
 class Settings(BaseSettings):
@@ -26,26 +29,39 @@ class Settings(BaseSettings):
     db_connect_timeout: int = Field(default=5, ge=2, le=120)
     db_statement_timeout: float = Field(default=5, gt=0, le=120)
     db_lock_timeout: float = Field(default=3, gt=0, le=120)
-    input_limit: int = Field(default=16 * 1024 * 1024, ge=1, le=16 * 1024 * 1024)
-    data_max_rows: int = Field(default=2000, ge=1, le=2000)
-    data_max_cells: int = Field(default=100000, ge=1, le=100000)
-    output_limit: int = Field(default=32 * 1024 * 1024, ge=1024, le=128 * 1024 * 1024)
+    input_limit: int = Field(default=16 * 1024 * 1024, ge=1)
+    data_max_rows: int = Field(default=2000, ge=1)
+    data_max_cells: int = Field(default=100000, ge=1)
+    output_limit: int = Field(default=32 * 1024 * 1024, ge=1)
+    template_limit: int = Field(default=1024 * 1024, ge=1)
+    snapshot_limit: int = Field(default=16 * 1024 * 1024, ge=1)
+    view_limit: int = Field(default=16 * 1024 * 1024, ge=1)
+    data_max_columns: int = Field(default=100, ge=1)
+    data_max_datasets: int = Field(default=32, ge=1)
+    data_max_string_chars: int = Field(default=10000, ge=1)
+    data_max_text_bytes: int = Field(default=16 * 1024 * 1024, ge=1)
+    report_max_table_rows: int = Field(default=2000, ge=1)
+    report_max_table_columns: int = Field(default=20, ge=1)
+    report_max_table_cells: int = Field(default=20000, ge=1)
+    report_max_chart_points: int = Field(default=500, ge=1)
+    report_max_chart_categories: int = Field(default=30, ge=1)
+    report_max_pages: int = Field(default=100, ge=1)
     data_view_slots: int = Field(default=2, ge=1, le=8)
     upload_slots: int = Field(default=4, ge=1, le=64)
-    upload_timeout: float = Field(default=120, gt=0, le=600)
+    upload_timeout: float = Field(default=120, gt=0)
     upload_idle_timeout: float = Field(default=30, gt=0, le=120)
     backlog_limit: int = Field(default=1000, ge=1, le=100000)
     admission_enabled: bool = True
     worker_concurrency: int = Field(default=2, ge=1, le=32)
     lease_seconds: float = Field(default=60, ge=3, le=600)
     heartbeat_seconds: float = Field(default=15, ge=0.2, le=120)
-    attempt_timeout: float = Field(default=120, ge=5, le=600)
+    attempt_timeout: float = Field(default=120, ge=5)
     render_timeout: float = Field(default=300, gt=0)
     startup_render_timeout: float = Field(default=30, gt=0)
     startup_timeout: float = Field(default=75, gt=0)
     health_max_age: float = Field(default=60, gt=0)
     cleanup_grace: float = Field(default=5, ge=5, le=30)
-    shutdown_grace: float = Field(default=130, ge=1, le=900)
+    shutdown_grace: float = Field(default=130, ge=1)
     max_attempts: int = Field(default=3, ge=1, le=10)
     poll_seconds: float = Field(default=1, ge=0.05, le=30)
     queue_max_age: int = Field(default=3600, ge=1)
@@ -54,7 +70,7 @@ class Settings(BaseSettings):
     input_retention: int | None = None
     result_retention: int = Field(default=86400, ge=1, le=2147483000)
     metadata_retention: int = Field(default=604800, ge=1, le=2147483647)
-    download_timeout: float = Field(default=120, gt=0, le=600)
+    download_timeout: float = Field(default=120, gt=0)
     orphan_grace: int = Field(default=900, ge=1)
     maintenance_interval: float = Field(default=30, ge=0.2, le=300)
     maintenance_batch_size: int = Field(default=100, ge=1, le=1000)
@@ -69,6 +85,31 @@ class Settings(BaseSettings):
                 "INPUT_RETENTION was retired in 0.3; use RESULT_RETENTION for all report artifacts"
             )
         return None
+
+    @property
+    def resource_limits(self) -> ResourceLimits:
+        return ResourceLimits(
+            data=DataLimits(
+                max_rows=self.data_max_rows,
+                max_cells=self.data_max_cells,
+                max_columns=self.data_max_columns,
+                max_datasets=self.data_max_datasets,
+                max_string_chars=self.data_max_string_chars,
+                max_text_bytes=self.data_max_text_bytes,
+                max_json_bytes=self.input_limit,
+            ),
+            report=ReportLimits(
+                max_table_rows=self.report_max_table_rows,
+                max_table_columns=self.report_max_table_columns,
+                max_table_cells=self.report_max_table_cells,
+                max_chart_points=self.report_max_chart_points,
+                max_chart_categories=self.report_max_chart_categories,
+                max_pages=self.report_max_pages,
+            ),
+            template_bytes=self.template_limit,
+            snapshot_bytes=self.snapshot_limit,
+            output_bytes=self.output_limit,
+        )
 
     @property
     def io_reserve(self) -> float:

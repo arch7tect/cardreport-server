@@ -47,7 +47,7 @@ def artifact_row(
 ) -> dict[str, object]:
     with db.pool.connection() as conn:
         row = conn.execute(
-            """SELECT state,result_key,result_size,result_hash,data_key,data_size,data_hash,output_kind,
+            """SELECT state,result_key,result_size,result_hash,data_key,data_size,data_hash,output_kind,resource_limits,
             result_expires_at>clock_timestamp() AS available FROM reports WHERE id=%s""",
             (report_id,),
         ).fetchone()

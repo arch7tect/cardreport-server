@@ -15,8 +15,6 @@ from cardreport.adapters.csv import from_csv
 
 from .input_files import FileResult, extract_parts
 
-SNAPSHOT_LIMIT = DataLimits().max_json_bytes
-
 
 def load_datasets(
     path: Path,
@@ -28,7 +26,7 @@ def load_datasets(
 ) -> dict[str, Dataset]:
     if path.stat().st_size > limits.max_json_bytes:
         raise DataError("Input exceeds its size limit")
-    parts = extract_parts(path, content_type)
+    parts = extract_parts(path, content_type, max_bytes=limits.max_json_bytes)
     results = results if results is not None else []
     results.extend(FileResult(id=file.id) for file in parts.files)
     options: dict[str, str] = {}

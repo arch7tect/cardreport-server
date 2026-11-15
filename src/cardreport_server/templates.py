@@ -27,12 +27,14 @@ def ensure_admission(request: Request) -> None:
         raise APIError(503, "admission_paused", "New work is temporarily paused")
 
 
-def register(db: Database, template_id: str, body: bytes, kind: str) -> dict[str, Any]:
+def register(
+    db: Database, template_id: str, body: bytes, kind: str, max_bytes: int = 1024 * 1024
+) -> dict[str, Any]:
     try:
         template = (
-            ReportTemplate.from_json(body)
+            ReportTemplate.from_json(body, max_bytes=max_bytes)
             if kind == "application/json"
-            else ReportTemplate.from_yaml(body)
+            else ReportTemplate.from_yaml(body, max_bytes=max_bytes)
         )
     except TemplateError as error:
         location = {"template_path": error.template_path} if error.template_path else {}
@@ -83,7 +85,12 @@ async def create_version(template_id: Slug, request: Request) -> dict[str, Any]:
     ):
         body, kind = await read_template(request)
         return await run_in_threadpool(
-            register, deps.database(request), template_id, body, kind
+            register,
+            deps.database(request),
+            template_id,
+            body,
+            kind,
+            deps.settings(request).template_limit,
         )
 
 

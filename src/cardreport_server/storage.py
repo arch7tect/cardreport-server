@@ -84,23 +84,29 @@ def read_verified(
     *,
     integrity: Exception,
     timeout: Exception,
+    destination: BinaryIO | None = None,
 ) -> bytes:
     """Read at most the declared size, verify it and always close the object body."""
     raw = bytearray()
+    total = 0
     digest = hashlib.sha256()
     try:
         while True:
             if time.monotonic() >= deadline:
                 raise timeout
-            chunk = body.read(min(64 * 1024, size + 1 - len(raw)))
+            chunk = body.read(min(64 * 1024, size + 1 - total))
             if not chunk:
                 break
-            if len(raw) + len(chunk) > size:
+            total += len(chunk)
+            if total > size:
                 raise integrity
-            raw.extend(chunk)
+            if destination is None:
+                raw.extend(chunk)
+            else:
+                destination.write(chunk)
             digest.update(chunk)
     finally:
         body.close()
-    if len(raw) != size or digest.hexdigest() != expected_hash:
+    if total != size or digest.hexdigest() != expected_hash:
         raise integrity
     return bytes(raw)

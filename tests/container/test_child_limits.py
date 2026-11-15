@@ -82,12 +82,14 @@ def test_real_child_limits(
     code = """import json,sys,tempfile,time,subprocess
 from pathlib import Path
 from cardreport_server.render_child import child_environment
+from cardreport_server.limits import ResourceLimits
 p=json.load(sys.stdin)
 with tempfile.TemporaryDirectory() as tmp:
  d=Path(tmp)
  (d/'template.json').write_text(json.dumps(p['template']))
  (d/'input').write_text(p['data'])
- (d/'options.json').write_text(json.dumps({'input_type':'application/json','renderer':p['renderer'],'output':'pdf' if p['case'] in ('overflow','large_table','long_budget') else 'html','render_timeout':450 if p['case']=='long_budget' else 30,'render_deadline':time.monotonic()+(-1 if p['case']=='expired' else 500 if p['case']=='long_budget' else 30),'output_limit':1024 if p['case']=='size' else 32000000,'data_limits':{}}))
+ limits=ResourceLimits(output_bytes=1024 if p['case']=='size' else 32000000)
+ (d/'options.json').write_text(json.dumps({'input_type':'application/json','renderer':p['renderer'],'output':'pdf' if p['case'] in ('overflow','large_table','long_budget') else 'html','render_timeout':450 if p['case']=='long_budget' else 30,'render_deadline':time.monotonic()+(-1 if p['case']=='expired' else 500 if p['case']=='long_budget' else 30),'limits':limits.model_dump()}))
  subprocess.run([sys.executable,'-m','cardreport_server.render_child',str(d)],env=child_environment(d),check=True,timeout=40)
  print((d/'outcome.json').read_text())
 """

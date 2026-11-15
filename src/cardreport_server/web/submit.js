@@ -105,7 +105,7 @@ export async function newReport(root, ctx, params) {
   });
   form.addEventListener('submit', async event => {
     event.preventDefault(); if (sending || archived || !selectedId) return;
-    let payload, size = 0, headers = {};
+    let payload, headers = {};
     if (mode.value === 'file') {
       if (!selectedFiles.length) { message(status, 'Add at least one data file.', 'error'); return; }
       const csvs = selectedFiles.filter(source => /\.csv$/i.test(source.name));
@@ -113,7 +113,6 @@ export async function newReport(root, ctx, params) {
       if (new Set(names).size !== names.length) {
         message(status, 'CSV files must have distinct dataset names. Remove the duplicate file.', 'error'); return;
       }
-      size = selectedFiles.reduce((total, source) => total + source.size, 0);
       {
         payload = new FormData();
         for (const source of selectedFiles) payload.append('files', source);
@@ -132,9 +131,8 @@ export async function newReport(root, ctx, params) {
     } else {
       payload = text.value;
       if (!payload.trim()) return;
-      size = new Blob([payload]).size; headers = {'Content-Type':format.value};
+      headers = {'Content-Type':format.value};
     }
-    if (size > 16 * 1024 * 1024) { message(status, 'Input exceeds the 16 MiB library limit. This server may use a lower limit.', 'error'); return; }
     sending = true; ctx.dirty = true; submit.disabled = true; fields.disabled = true;
     message(status, 'Sending… Leaving this page does not cancel a report accepted by the server.');
     try {

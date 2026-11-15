@@ -32,6 +32,8 @@ def wait(client: httpx.Client, url: str) -> dict[str, object]:
 @pytest.mark.parametrize(
     "name,extension,output,renderer",
     [
+        ("company", "json", "pdf", "chromium"),
+        ("company", "json", "pdf", "weasyprint"),
         ("reference", "json", "pdf", "chromium"),
         ("reference", "yaml", "html", "chromium"),
         ("flow", "json", "pdf", "chromium"),
@@ -88,6 +90,9 @@ def test_complete_report(
             pdf = PdfReader(io.BytesIO(content.content))
             text = "\n".join(page.extract_text() for page in pdf.pages)
             assert text.strip()
+            if name == "company":
+                assert "Monthly account statement" in text
+                assert len(pdf.pages[0].images) >= 1
             if name == "daily":
                 assert "Daily report for 14.11.2026" in text
                 assert "Month: November 2026" in text

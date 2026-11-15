@@ -6,20 +6,13 @@ Output = Literal["pdf", "html"]
 RendererName = Literal["chromium", "weasyprint"]
 
 
-class DataLimitOptions(TypedDict, total=False):
-    max_rows: int
-    max_cells: int
-    max_json_bytes: int
-
-
 class RenderOptions(TypedDict):
     input_type: str
     output: Output
     renderer: RendererName
     render_timeout: float
     render_deadline: float
-    data_limits: DataLimitOptions
-    output_limit: int
+    limits: dict[str, object]
 
 
 class Outcome(TypedDict, total=False):

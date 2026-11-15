@@ -601,7 +601,7 @@ disjoint named JSON/YAML bundles and typed CSV datasets using public library
 adapters, then binds with cumulative limits. Client filenames are not paths.
 
 After binding, the child serializes a lossless snapshot with the public encoder,
-bounded by the library's 16 MiB ceiling, before rendering. The supervisor uploads
+bounded by the saved snapshot budget, before rendering. The supervisor uploads
 both artifacts to attempt-specific keys and commits their pointers in the same
 fenced transaction. A failed/stale attempt publishes neither pointer; abandoned
 objects are collected after the orphan grace. Successful snapshots share result
@@ -716,3 +716,14 @@ and report binding. The service stores their source unchanged and passes typed
 named datasets through its existing pipeline. There is no server-side Jinja
 interpreter, additional transport or schema copy. List/search operates on source
 titles; actual dates and other substitutions appear only in generated reports.
+
+## Resource policy snapshots
+
+Admission stores a ResourceLimits record with each job (migration 0009). It contains
+only operator-selected data/report limits and template/snapshot/output byte budgets.
+The child consumes the same record as its supervisor; later configuration changes
+do not retroactively invalidate accepted jobs or successful snapshots. Legacy null
+records mean the old default budgets. Current preview limits remain independent.
+Raw original downloads spool verified bytes to disk instead of materializing the
+whole request; structured inspection retains its bounded in-memory implementation.
+See [larger reports and images](user/operations.md#larger-reports-and-images).

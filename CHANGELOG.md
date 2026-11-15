@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.6.0
+
+- Adopt CardReport 0.10 with PNG/JPEG components, embedded template assets and
+  left/right first-page company logos in Chromium and WeasyPrint.
+- Make dataset, table, chart, page and template/input/snapshot/output byte budgets
+  operator-configurable; save accepted budgets with each report.
+- Keep retained inputs and normalized data readable after admission limits change.
+  Bound previews independently and keep download links available above that budget.
+- Verify raw original downloads to scratch disk before streaming, preserving size,
+  hash and expiry checks without buffering the whole input in API memory.
+- Add migration 0009. Upgrade API/workers together after pausing and draining;
+  preserve existing database and object-storage volumes.
+
 ## 0.5.1
 
 - Upgrade CardReport to 0.9.1 for consistent report timezone display and the

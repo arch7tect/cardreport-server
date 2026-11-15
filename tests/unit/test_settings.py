@@ -15,7 +15,7 @@ from cardreport_server.settings import Settings
         {"retry_max_delay": 4},
         {"db_lock_timeout": 6},
         {"maintenance_batch_size": 1001},
-        {"input_limit": 17 * 1024 * 1024},
+        {"input_limit": 0},
         {"worker_concurrency": 0},
         {"lease_seconds": 45},
         {"upload_timeout": 10},
@@ -41,3 +41,14 @@ def test_retired_setting_has_migration_message(
 ) -> None:
     with pytest.raises(ValidationError, match="INPUT_RETENTION was retired"):
         Settings.model_validate(settings.model_dump() | {"input_retention": value})
+
+
+def test_legacy_policy_preserves_historical_upper_output_budget() -> None:
+    from cardreport_server.limits import restored_limits
+
+    policy = restored_limits(None)
+    assert policy.output_bytes == 128 * 1024 * 1024
+    assert policy.data.max_json_bytes == 16 * 1024 * 1024
+    assert policy.template_bytes == 1024 * 1024
+    assert policy.snapshot_bytes == 16 * 1024 * 1024
+    assert restored_limits({"output_bytes": 100}).output_bytes == 100

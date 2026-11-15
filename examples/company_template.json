@@ -1,0 +1,45 @@
+{
+  "format": "cardreport.template/1",
+  "datasets": {},
+  "assets": {
+    "company": {
+      "media_type": "image/png",
+      "data_base64": "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"
+    }
+  },
+  "report": {
+    "title": "Monthly account statement",
+    "subtitle": "November 2026 · Company image example",
+    "logo": {
+      "asset": "company",
+      "alt": "ACME"
+    },
+    "logo_position": "right",
+    "blocks": [
+      {
+        "type": "card",
+        "title": "Company details",
+        "content": {
+          "type": "row",
+          "height_mm": 30,
+          "widths": [
+            1,
+            2
+          ],
+          "children": [
+            {
+              "type": "image",
+              "asset": "company",
+              "width_mm": 45,
+              "alt": "ACME"
+            },
+            {
+              "type": "text",
+              "text": "The same embedded image appears in the header and in a card."
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

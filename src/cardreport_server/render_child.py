@@ -14,7 +14,6 @@ from cardreport import (
     BindingError,
     ChromiumRenderer,
     DataError,
-    DataLimits,
     DependencyError,
     LayoutOverflowError,
     Renderer,
@@ -27,9 +26,10 @@ from cardreport import (
     datasets_to_json,
 )
 
-from .datasets import SNAPSHOT_LIMIT, load_datasets
+from .datasets import load_datasets
 from .input_files import FileResult
 from .layout_diagnostics import validated_diagnostic
+from .limits import ResourceLimits
 from .render_contract import Outcome, RenderOptions
 
 
@@ -51,15 +51,18 @@ def main() -> None:
     files: list[FileResult] = []
     try:
         options: RenderOptions = json.loads((directory / "options.json").read_text())
-        template = ReportTemplate.from_json((directory / "template.json").read_bytes())
-        limits = DataLimits(**options["data_limits"])
+        policy = ResourceLimits.model_validate(options["limits"])
+        template = ReportTemplate.from_json(
+            (directory / "template.json").read_bytes(), max_bytes=policy.template_bytes
+        )
+        limits = policy.data
         datasets = load_datasets(
             directory / "input", options["input_type"], template, limits, results=files
         )
-        report = template.bind(datasets, limits=limits)
+        report = template.bind(datasets, limits=limits, report_limits=policy.report)
         stage = "snapshot"
         snapshot = datasets_to_json(
-            datasets, limits=replace(limits, max_json_bytes=SNAPSHOT_LIMIT)
+            datasets, limits=replace(limits, max_json_bytes=policy.snapshot_bytes)
         )
         (directory / "data.json").write_text(snapshot, encoding="utf-8")
         stage = "render"
@@ -78,7 +81,7 @@ def main() -> None:
             if options["output"] == "pdf"
             else report.to_html(renderer=renderer).encode()
         )
-        if len(payload) > options["output_limit"]:
+        if len(payload) > policy.output_bytes:
             outcome = {
                 "code": "output_too_large",
                 "stage": "render",
@@ -98,7 +101,7 @@ def main() -> None:
             outcome = {
                 "code": "data_snapshot_too_large",
                 "stage": "bind",
-                "message": "Normalized report data exceeds the 16 MiB snapshot limit",
+                "message": "Normalized report data exceeds the configured snapshot limit",
             }
         else:
             outcome = {

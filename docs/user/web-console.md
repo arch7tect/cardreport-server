@@ -79,7 +79,8 @@ Options apply to every CSV file in the submission; bundles retain their
 own JSON/YAML types. The full multipart body, including boundaries and options,
 must fit the configured input cap. File-size prechecks cannot include all transport
 overhead; the server remains authoritative.
-The console checks library hard caps; configured server limits can be lower.
+The server enforces operator-configured budgets. The console displays its errors;
+it does not impose the old fixed 1 MiB template or 16 MiB upload ceilings.
 
 Generate submits once and opens the accepted job. A 202 response means that data
 and job metadata were stored, not that parsing or rendering succeeded. The worker
@@ -223,3 +224,9 @@ template version. Template editing/history shows the source expressions; preview
 and downloaded output show substituted values. The existing input-file download
 and normalized data view remain available for investigation. See the
 [API recipe](api.md#daily-report-text) for automated submissions.
+
+Large retained inputs or snapshots can exceed the preview budget. Use **Download original request** or the normalized data download when inspection returns 413; raising input budgets does not automatically raise preview memory use.
+
+For a company logo, upload [company_template.json](../../examples/company_template.json)
+and submit [company_data.json](../../examples/company_data.json). The embedded PNG
+appears beside the title and inside a card; both PDF engines support this example.

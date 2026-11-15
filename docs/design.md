@@ -49,9 +49,9 @@ Inspected library baseline: 0.8.1, source commit
 Public pipeline: ReportTemplate.from_json/from_yaml -> datasets_from_json/from_yaml
 -> template.bind(datasets) -> report.to_pdf/to_html. No fork/private APIs required.
 
-Important existing limits: templates are bounded to 1 MiB, data JSON to 16 MiB;
+Historical baseline (superseded by [configurable budgets](user/operations.md#larger-reports-and-images)): templates were bounded to 1 MiB, data JSON to 16 MiB;
 default DataLimits include 2,000 rows, 100 columns, 32 datasets and 100,000 cells.
-Library limits may only be reduced. Streaming HTTP does not remove these limits:
+At that baseline library limits could only be reduced. Streaming HTTP does not remove these limits:
 decoding, immutable datasets, charts and page layout still materialize bounded
 input. This service is not a streaming renderer for arbitrary-size databases.
 

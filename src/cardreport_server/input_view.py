@@ -11,15 +11,16 @@ from typing import Any, Literal
 from uuid import UUID
 
 import anyio
-from cardreport import DataError, DataLimits
+from cardreport import DataError
 from fastapi import APIRouter, Request
 from starlette.concurrency import run_in_threadpool
-from starlette.responses import Response
+from starlette.responses import FileResponse, Response
 from starlette.types import Receive, Scope, Send
 
 from . import dependencies as deps
 from .errors import APIError
 from .input_files import extract_parts
+from .limits import restored_limits
 from .storage import read_verified
 
 router = APIRouter(prefix="/v1/reports", tags=["Reports"])
@@ -53,10 +54,17 @@ def _prepare(
             raise APIError(504, "input_timeout", "Reading report inputs timed out")
 
     row = input_row(request, report_id)
+    policy = restored_limits(row.get("resource_limits"))
     size = row["input_size"]
     # Retained uploads remain readable after an operator lowers admission limits.
-    if not isinstance(size, int) or not 0 <= size <= DataLimits().max_json_bytes:
+    if not isinstance(size, int) or not 0 <= size <= policy.data.max_json_bytes:
         raise APIError(503, "input_integrity", "Saved input is invalid")
+    if size > deps.settings(request).view_limit:
+        raise APIError(
+            413,
+            "input_view_too_large",
+            "Input is too large to inspect; download the original request",
+        )
     raw = read_verified(
         deps.storage(request).get(row["input_key"]),
         size,
@@ -73,7 +81,9 @@ def _prepare(
             path = Path(directory) / "input"
             path.write_bytes(raw)
             try:
-                parts = extract_parts(path, row["input_type"])
+                parts = extract_parts(
+                    path, row["input_type"], max_bytes=policy.data.max_json_bytes
+                )
             except DataError:
                 pass
         results = {r["id"]: r for r in row["input_files"] or []}
@@ -151,6 +161,62 @@ def _prepare(
     return payload, filename
 
 
+def _prepare_raw(
+    request: Request, report_id: UUID, path: Path, deadline: float
+) -> None:
+    row = input_row(request, report_id)
+    policy = restored_limits(row.get("resource_limits"))
+    size = row["input_size"]
+    if not isinstance(size, int) or not 0 <= size <= policy.data.max_json_bytes:
+        raise APIError(503, "input_integrity", "Saved input is invalid")
+    with path.open("wb") as destination:
+        read_verified(
+            deps.storage(request).get(row["input_key"]),
+            size,
+            row["input_hash"],
+            deadline,
+            integrity=APIError(503, "input_integrity", "Saved input is invalid"),
+            timeout=APIError(504, "input_timeout", "Reading report inputs timed out"),
+            destination=destination,
+        )
+    input_row(request, report_id)
+
+
+class RawInputResponse(FileResponse):
+    def __init__(
+        self,
+        path: Path,
+        directory: tempfile.TemporaryDirectory[str],
+        request: Request,
+        borrower: object,
+        deadline: float,
+    ) -> None:
+        super().__init__(
+            path,
+            filename="input.raw",
+            media_type="application/octet-stream",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "sandbox; default-src 'none'",
+            },
+        )
+        self.directory, self.request, self.borrower, self.deadline = (
+            directory,
+            request,
+            borrower,
+            deadline,
+        )
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            with anyio.fail_after(max(0, self.deadline - time.monotonic())):
+                await super().__call__(scope, receive, send)
+        finally:
+            self.directory.cleanup()
+            deps.data_view_limiter(self.request).release_on_behalf_of(self.borrower)
+
+
 class InputResponse(Response):
     def __init__(
         self,
@@ -191,6 +257,17 @@ async def read_input(
         ) from None
     deadline = time.monotonic() + deps.settings(request).download_timeout
     try:
+        if kind == "raw":
+            directory = tempfile.TemporaryDirectory(prefix="cardreport-raw-")
+            path = Path(directory.name) / "input.raw"
+            try:
+                await run_in_threadpool(
+                    _prepare_raw, request, report_id, path, deadline
+                )
+                return RawInputResponse(path, directory, request, borrower, deadline)
+            except BaseException:
+                directory.cleanup()
+                raise
         payload, filename = await run_in_threadpool(
             _prepare, request, report_id, kind, index, deadline
         )

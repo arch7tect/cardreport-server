@@ -41,7 +41,7 @@ class FileResult(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     id: int = Field(ge=1, le=32)
     status: Literal["parsed", "failed", "skipped"] = "skipped"
-    datasets: list[str] = Field(default_factory=list, max_length=32)
+    datasets: list[str] = Field(default_factory=list)
     error: Literal["invalid_file", "duplicate_dataset"] | None = None
 
 
@@ -55,8 +55,10 @@ class CompleteMultipartParser(MultiPartParser):
         self.complete = True
 
 
-def extract_parts(path: Path, content_type: str) -> InputFiles:
-    if path.stat().st_size > DataLimits().max_json_bytes:
+def extract_parts(
+    path: Path, content_type: str, *, max_bytes: int = DataLimits().max_json_bytes
+) -> InputFiles:
+    if path.stat().st_size > max_bytes:
         raise DataError("Input exceeds its size limit")
     if content_type.startswith("multipart/form-data;"):
         return asyncio.run(_extract(path, content_type))
@@ -115,7 +117,9 @@ async def _extract(path: Path, content_type: str) -> InputFiles:
         await form.close()
 
 
-def read_results(directory: Path, content_type: str) -> list[dict[str, object]] | None:
+def read_results(
+    directory: Path, content_type: str, *, max_bytes: int = DataLimits().max_json_bytes
+) -> list[dict[str, object]] | None:
     path = directory / "files.json"
     if not path.exists():
         return None
@@ -123,7 +127,9 @@ def read_results(directory: Path, content_type: str) -> list[dict[str, object]] 
         raise ValueError("File diagnostics exceed their size limit")
     results = RESULTS.validate_json(path.read_bytes())
     try:
-        count = len(extract_parts(directory / "input", content_type).files)
+        count = len(
+            extract_parts(directory / "input", content_type, max_bytes=max_bytes).files
+        )
     except DataError:
         count = 0
     if [r.id for r in results] != list(range(1, count + 1)):

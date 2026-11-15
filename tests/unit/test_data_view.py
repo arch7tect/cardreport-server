@@ -62,7 +62,7 @@ def test_snapshot_read_closes_and_verifies(
     app = SimpleNamespace(
         state=SimpleNamespace(
             database=object(),
-            settings=SimpleNamespace(download_timeout=10),
+            settings=SimpleNamespace(download_timeout=10, view_limit=16 * 1024 * 1024),
             storage=SimpleNamespace(get=lambda _: body),
         )
     )

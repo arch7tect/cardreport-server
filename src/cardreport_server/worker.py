@@ -23,7 +23,6 @@ from psycopg import InterfaceError, OperationalError
 from psycopg_pool import PoolTimeout
 
 from . import jobs
-from .datasets import SNAPSHOT_LIMIT
 from .db import Database
 from .input_files import read_results
 from .layout_diagnostics import validated_diagnostic
@@ -93,7 +92,7 @@ class Worker:
             (directory / "template.json").write_text(row["definition"])
             with (directory / "input").open("wb") as stream:
                 size = self.storage.download(
-                    attempt.input_key, stream, self.settings.input_limit
+                    attempt.input_key, stream, attempt.limits.data.max_json_bytes
                 )
             digest = hashlib.sha256((directory / "input").read_bytes()).hexdigest()
             if size != attempt.input_size or digest != attempt.input_hash:
@@ -132,12 +131,7 @@ class Worker:
                 "render_deadline": running.deadline
                 - self.settings.cleanup_grace
                 - self.settings.io_reserve,
-                "data_limits": {
-                    "max_rows": self.settings.data_max_rows,
-                    "max_cells": self.settings.data_max_cells,
-                    "max_json_bytes": self.settings.input_limit,
-                },
-                "output_limit": self.settings.output_limit,
+                "limits": attempt.limits.model_dump(),
             }
             (directory / "options.json").write_text(json.dumps(options))
             process = subprocess.Popen(
@@ -169,7 +163,11 @@ class Worker:
                 if diagnostic is not None:
                     outcome["diagnostic"] = diagnostic
             try:
-                files = read_results(directory, attempt.input_type)
+                files = read_results(
+                    directory,
+                    attempt.input_type,
+                    max_bytes=attempt.limits.data.max_json_bytes,
+                )
             except ValueError:
                 log.warning(
                     "Discarding invalid file diagnostics for %s", attempt.report_id
@@ -194,7 +192,7 @@ class Worker:
                 return
             result = directory / "result"
             size = result.stat().st_size
-            if size > self.settings.output_limit:
+            if size > attempt.limits.output_bytes:
                 self.complete(
                     attempt,
                     {
@@ -211,13 +209,13 @@ class Worker:
             )
             data_path = directory / "data.json"
             data_size = data_path.stat().st_size
-            if data_size > SNAPSHOT_LIMIT:
+            if data_size > attempt.limits.snapshot_bytes:
                 self.complete(
                     attempt,
                     {
                         "code": "data_snapshot_too_large",
                         "stage": "bind",
-                        "message": "Normalized report data exceeds the 16 MiB snapshot limit",
+                        "message": "Normalized report data exceeds the configured snapshot limit",
                     },
                     files,
                 )

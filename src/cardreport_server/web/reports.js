@@ -192,12 +192,13 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
     filesArea.hidden = false; showFiles.textContent = 'Hide input files'; showFiles.setAttribute('aria-expanded', 'true');
     const fileStatus = notice(); message(fileStatus, 'Loading original input files…');
     const base = `/v1/reports/${encodeURIComponent(id)}`;
-    filesArea.replaceChildren(el('h2', {}, 'Original input files'), fileStatus);
+    filesArea.replaceChildren(el('h2', {}, 'Original input files'), fileStatus,
+      el('a', {href:base + '/input', class:'button'}, 'Download original request'));
     try {
       const catalog = await api(base + '/files', {}, ctx.controller.signal);
       if (!ctx.active || token !== filesRequest) return;
       filesArea.append(el('p', {class:'muted'}, 'Exact uploaded bytes, before conversion. Parsed means the file was decoded; the report can still fail during binding or rendering. Skipped means not attempted. Unknown means no completed parse diagnostics are available.'),
-        el('div', {class:'actions'}, el('a', {href:base + '/inputs.zip', class:'button'}, 'Download investigation ZIP'), el('a', {href:base + '/input', class:'button'}, 'Download original request')));
+        el('div', {class:'actions'}, el('a', {href:base + '/inputs.zip', class:'button'}, 'Download investigation ZIP')));
       if (catalog.structure === 'invalid') { message(fileStatus, 'The upload structure is invalid. Download the original request to investigate.', 'error'); return; }
       const table = el('table', {}, el('thead', {}, el('tr', {}, ...['File', 'Size', 'Parsing', 'Datasets', 'Download'].map(title => el('th', {}, title)))),
         el('tbody', {}, ...catalog.files.map(file => el('tr', {}, el('td', {}, file.name, el('div', {class:'muted mono'}, `SHA-256: ${file.sha256}`)), el('td', {}, `${file.size} bytes`), el('td', {}, file.status, file.error ? ` (${file.error})` : ''), el('td', {}, file.datasets.join(', ') || '—'), el('td', {}, el('a', {href:`${base}/files/${file.id}/content`}, 'Download original'))))));
@@ -217,23 +218,23 @@ export async function reportDetail(root, ctx, id, params = new URLSearchParams()
     dataArea.hidden = false; showData.textContent = 'Hide data'; showData.setAttribute('aria-expanded', 'true');
     const dataStatus = notice(); message(dataStatus, 'Loading report data…');
     const base = `/v1/reports/${encodeURIComponent(id)}`;
-    dataArea.replaceChildren(el('h2', {}, 'Report data'), dataStatus);
+    const dataDownload = el('a', {href:base + '/data', class:'button'}, 'Download data JSON');
+    dataDownload.addEventListener('click', async event => {
+      event.preventDefault();
+      if (await load(true) && row.data_available) el('a', {href:base + '/data', download:''}).click();
+    });
+    dataArea.replaceChildren(el('h2', {}, 'Report data'), dataStatus, dataDownload);
     try {
       const catalog = await api(base + '/datasets', {}, ctx.controller.signal);
       if (!ctx.active || token !== dataRequest) return;
       const choice = select(catalog.items.map(item => [item.name, `${item.name} (${item.row_count} rows)`]));
       let offset = 0, pageRequest = 0;
-      const dataDownload = el('a', {href:base + '/data', class:'button'}, 'Download data JSON');
-      dataDownload.addEventListener('click', async event => {
-        event.preventDefault();
-        if (await load(true) && row.data_available) el('a', {href:base + '/data', download:''}).click();
-      });
       const retry = button('Retry rows', () => loadPage()); retry.hidden = true;
       const table = el('table'), range = el('span', {class:'muted'});
       const previous = button('Previous rows', () => { offset = Math.max(0, offset - 100); loadPage(); });
       const next = button('Next rows', () => { offset += 100; loadPage(); });
       dataArea.append(el('p', {class:'muted'}, 'Immutable input datasets used for this report. Values are shown exactly; null is displayed as ∅.'),
-        el('div', {class:'toolbar'}, field('Dataset', choice), dataDownload),
+        el('div', {class:'toolbar'}, field('Dataset', choice)),
         el('div', {class:'table-wrap data-table'}, table), el('div', {class:'actions'}, previous, range, next, retry));
       async function loadPage() {
         const request = ++pageRequest; previous.disabled = true; next.disabled = true; retry.hidden = true;

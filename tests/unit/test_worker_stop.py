@@ -66,6 +66,7 @@ def test_cancelled_child_launch_wakes_supervisor(
         input_type="application/json",
         output="pdf",
         renderer="chromium",
+        limits=worker.settings.resource_limits,
     )
     running = Running(attempt, time.monotonic() + 120, time.monotonic() + 60)
     child = Mock()

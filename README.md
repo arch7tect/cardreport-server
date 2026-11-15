@@ -29,7 +29,7 @@ authentication: deploy only on a trusted internal network.
 
 ## Run a released image
 
-Use `ghcr.io/arch7tect/cardreport-server:0.5.1` for API, workers and migrations.
+Use `ghcr.io/arch7tect/cardreport-server:0.6.0` for API, workers and migrations.
 The [installation guide](docs/releases.md#install-a-released-image) starts the full
 stack from the published image, without building it locally. For existing services,
 follow the coordinated upgrade procedure before changing images.
@@ -168,6 +168,8 @@ and [the console guide](docs/user/web-console.md#understanding-layout-failures).
 
 ## Documentation
 
+See [larger reports and images](docs/user/operations.md#larger-reports-and-images) for configurable budgets, retained-data previews and embedded company logos.
+
 - [Python quickstart and JSON/YAML/CSV examples](docs/user/quickstart.md)
 - [Web console](docs/user/web-console.md)
 - [HTTP API, history filters, status and error contract](docs/user/api.md)
@@ -178,7 +180,7 @@ and [the console guide](docs/user/web-console.md#understanding-layout-failures).
 - [Releases, image installation and publication](docs/releases.md)
 - [Changelog](CHANGELOG.md)
 
-The library's dataset limits remain in force. Upload streaming bounds API
+Operator-configured dataset and report budgets remain in force. Upload streaming bounds API
 memory; worker decoding and rendering still materialize data. There is no arbitrary
 code execution, SQL connector, URL data fetcher, broker, or separate scheduler.
 

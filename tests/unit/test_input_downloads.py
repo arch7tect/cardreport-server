@@ -1,7 +1,9 @@
 import asyncio
 import hashlib
 import io
+import tempfile
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 from uuid import uuid4
@@ -9,6 +11,7 @@ from uuid import uuid4
 import anyio
 import pytest
 from starlette.requests import Request
+from starlette.responses import Response
 
 from cardreport_server import input_view
 from cardreport_server.errors import APIError
@@ -34,7 +37,10 @@ def test_input_read_bounds_and_recheck(
         lookup.side_effect = [row, APIError(410, "input_expired", "Expired")]
     monkeypatch.setattr(input_view, "input_row", lookup)
     app = SimpleNamespace(
-        state=SimpleNamespace(storage=SimpleNamespace(get=lambda _: body))
+        state=SimpleNamespace(
+            storage=SimpleNamespace(get=lambda _: body),
+            settings=SimpleNamespace(view_limit=16 * 1024 * 1024),
+        )
     )
     request = Request({"type": "http", "app": app})
     deadline = time.monotonic() + (100 if fault != "deadline" else -1)
@@ -56,7 +62,8 @@ def test_input_read_bounds_and_recheck(
     assert body.closed
 
 
-def test_input_response_holds_capacity_until_delivery() -> None:
+@pytest.mark.parametrize("raw", [False, True])
+def test_input_response_holds_capacity_until_delivery(raw: bool) -> None:
     async def run() -> None:
         limiter = anyio.CapacityLimiter(1)
         borrower = object()
@@ -69,22 +76,37 @@ def test_input_response_holds_capacity_until_delivery() -> None:
                 ),
             }
         )
-        response = input_view.InputResponse(
-            b"data",
-            request=request,
-            borrower=borrower,
-            deadline=time.monotonic() + 0.02,
-        )
+        response: Response
+        directory = None
+        if raw:
+            directory = tempfile.TemporaryDirectory()
+            path = Path(directory.name) / "input.raw"
+            path.write_bytes(b"data")
+            response = input_view.RawInputResponse(
+                path, directory, request, borrower, time.monotonic() + 0.02
+            )
+        else:
+            response = input_view.InputResponse(
+                b"data",
+                request=request,
+                borrower=borrower,
+                deadline=time.monotonic() + 0.02,
+            )
 
         async def send(message: object) -> None:
             assert limiter.borrowed_tokens == 1
             await anyio.sleep(1)
 
         async def receive() -> dict[str, str]:
+            await anyio.sleep(10)
             return {"type": "http.disconnect"}
 
         with pytest.raises(TimeoutError):
-            await response({"type": "http"}, receive, send)
+            await response(
+                {"type": "http", "method": "GET", "headers": []}, receive, send
+            )
         assert limiter.borrowed_tokens == 0
+        if directory is not None:
+            assert not Path(directory.name).exists()
 
     asyncio.run(run())

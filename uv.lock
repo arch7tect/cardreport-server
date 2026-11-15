@@ -281,7 +281,7 @@ wheels = [
 
 [[package]]
 name = "cardreport"
-version = "0.9.1"
+version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "babel" },
@@ -289,14 +289,15 @@ dependencies = [
     { name = "jinja2" },
     { name = "jsonschema" },
     { name = "langcodes" },
+    { name = "pillow" },
     { name = "plotly" },
     { name = "referencing" },
     { name = "ruamel-yaml" },
     { name = "tzdata" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/a6/34df882d61e60e42fba3205cf947212fbb316a9442b4afa9cd78e31001c2/cardreport-0.9.1.tar.gz", hash = "sha256:09c68605b8e283df2220459f12ba247fb9483ca446621a005228860090ef8ac1", size = 1935866, upload-time = "2026-11-14T10:19:59.973Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/0d/1808ae14f5fc52c80fb8ac7dae8d3a0c10686846229a2e29b9207b1df30f/cardreport-0.10.0.tar.gz", hash = "sha256:614d640246c6570d34268b34f1ae155002bc3c541c38bf7e319a0308079061e0", size = 1959587, upload-time = "2026-11-15T07:39:45.668Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/10/f9/8c3290c3e83857ec9a04e6cdacacba9208cfd57c997ac707f64a93a790a8/cardreport-0.9.1-py3-none-any.whl", hash = "sha256:739796837184285b05f0f708bee577b6b10d7c5168cd3933e8b0ce1a41d5dae9", size = 810033, upload-time = "2026-11-14T10:19:57.792Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/81/beea4947dea2ff33d6f15530edf45e5d628257e7d90f8430ea32d274f4a8/cardreport-0.10.0-py3-none-any.whl", hash = "sha256:8771133c2072279ab8395dbe809dfbe7880ac297fe910647c5111dba7fe37184", size = 815611, upload-time = "2026-11-15T07:39:43.882Z" },
 ]
 
 [package.optional-dependencies]
@@ -315,7 +316,7 @@ weasyprint = [
 
 [[package]]
 name = "cardreport-server"
-version = "0.5.1"
+version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -347,7 +348,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.15,<2" },
     { name = "boto3", specifier = ">=1.37,<2" },
-    { name = "cardreport", extras = ["pdf", "weasyprint"], specifier = ">=0.9.1,<0.10" },
+    { name = "cardreport", extras = ["pdf", "weasyprint"], specifier = ">=0.10.0,<0.11" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "prometheus-client", specifier = ">=0.21,<1" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2,<4" },

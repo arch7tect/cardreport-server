@@ -47,6 +47,7 @@ def test_file_diagnostics_are_advisory_and_survive_failure(
         input_type="application/json",
         output="html",
         renderer="chromium",
+        limits=worker.settings.resource_limits,
     )
     files = [{"id": 1, "status": "parsed", "datasets": ["summary"], "error": None}]
 
@@ -81,7 +82,7 @@ def test_file_diagnostics_are_advisory_and_survive_failure(
 
     monkeypatch.setattr(subprocess, "Popen", launch)
     if case == "snapshot_limit":
-        monkeypatch.setattr(module, "SNAPSHOT_LIMIT", 1)
+        attempt.limits = attempt.limits.model_copy(update={"snapshot_bytes": 1})
     finish = Mock(return_value=True)
     monkeypatch.setattr(jobs, "finish", finish)
     worker.execute(

@@ -125,8 +125,7 @@ def test_child_applies_configured_pdf_budget(
                 "renderer": "chromium",
                 "render_deadline": 1000 + budget,
                 "render_timeout": cap,
-                "data_limits": {},
-                "output_limit": 10000,
+                "limits": {},
             }
         )
     )

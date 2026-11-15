@@ -257,12 +257,11 @@ def test_child_applies_combined_limits(
         json.dumps(
             {
                 "input_type": kind,
-                "data_limits": {"max_cells": 1},
+                "limits": {"data": {"max_cells": 1}},
                 "output": "html",
                 "renderer": "chromium",
                 "render_timeout": 30,
                 "render_deadline": time.monotonic() + 30,
-                "output_limit": 16 * 1024 * 1024,
             }
         )
     )
@@ -314,12 +313,11 @@ def test_child_snapshot_uses_typed_values(
         json.dumps(
             {
                 "input_type": kind,
-                "data_limits": {},
+                "limits": {},
                 "output": "html",
                 "renderer": "chromium",
                 "render_timeout": 30,
                 "render_deadline": time.monotonic() + 30,
-                "output_limit": 16 * 1024 * 1024,
             }
         )
     )
@@ -330,9 +328,40 @@ def test_child_snapshot_uses_typed_values(
     snapshot = datasets_from_json((tmp_path / "data.json").read_bytes())
     assert snapshot["summary"].rows == ((999999999999000,),)
     # A CSV can fit the raw limit but expand beyond the canonical snapshot limit.
-    monkeypatch.setattr(render_child, "SNAPSHOT_LIMIT", 1)
+    options = json.loads((tmp_path / "options.json").read_text())
+    options["limits"]["snapshot_bytes"] = 1
+    (tmp_path / "options.json").write_text(json.dumps(options))
     render_child.main()
     assert (
         json.loads((tmp_path / "outcome.json").read_text())["code"]
         == "data_snapshot_too_large"
     )
+
+
+def test_large_original_keeps_file_diagnostics(tmp_path: Path) -> None:
+    from cardreport_server.input_files import extract_parts, read_results
+
+    original = b" " * (16 * 1024 * 1024) + b"{}"
+    path = tmp_path / "input"
+    path.write_bytes(original)
+    cap = len(original)
+    with pytest.raises(DataError):
+        extract_parts(path, "application/json")
+    parts = extract_parts(path, "application/json", max_bytes=cap)
+    assert parts.files[0].content == original
+    (tmp_path / "files.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": 1,
+                    "status": "parsed",
+                    "datasets": [f"d{i}" for i in range(33)],
+                    "error": None,
+                }
+            ]
+        )
+    )
+    results = read_results(tmp_path, "application/json", max_bytes=cap)
+    assert results
+    names = results[0]["datasets"]
+    assert isinstance(names, list) and len(names) == 33

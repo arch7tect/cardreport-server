@@ -71,3 +71,64 @@ def test_real_early_upload_limit(
         thread.join(timeout=10)
         listener.close()
         assert not thread.is_alive()
+
+
+def test_downloads_remain_visible_when_preview_is_too_large(
+    page: Page, api_url: str
+) -> None:
+    import httpx
+
+    slug = "ui-preview-budget-" + uuid4().hex
+    with httpx.Client(base_url=api_url) as client:
+        response = client.post(
+            f"/v1/templates/{slug}/versions",
+            json={
+                "format": "cardreport.template/1",
+                "datasets": {},
+                "report": {"blocks": [{"type": "text", "text": "Preview budget"}]},
+            },
+        )
+        assert response.status_code == 201
+        response = client.post(
+            "/v1/reports",
+            params={"template_id": slug, "output": "html"},
+            json={"format": "cardreport.data/1", "datasets": {}},
+        )
+        assert response.status_code == 202
+        base = response.json()["status_url"]
+    page.route(
+        "**" + base + "/datasets",
+        lambda route: route.fulfill(
+            status=413,
+            json={
+                "error": {
+                    "code": "data_view_too_large",
+                    "message": "Too large to preview; download data",
+                },
+            },
+        ),
+    )
+    page.route(
+        "**" + base + "/files",
+        lambda route: route.fulfill(
+            status=413,
+            json={
+                "error": {
+                    "code": "input_view_too_large",
+                    "message": "Too large to inspect; download original",
+                },
+            },
+        ),
+    )
+    page.goto("/ui/#/reports/" + base.rsplit("/", 1)[1])
+    expect(page.locator(".badge.succeeded")).to_be_visible(timeout=180000)
+    page.get_by_role("button", name="Show input files", exact=True).click()
+    expect(page.get_by_text("Too large to inspect; download original")).to_be_visible()
+    with page.expect_download() as download:
+        page.get_by_role("link", name="Download original request", exact=True).click()
+    assert download.value.failure() is None
+    page.get_by_role("button", name="Show data", exact=True).click()
+    expect(page.get_by_text("Too large to preview; download data")).to_be_visible()
+    with page.expect_download() as download:
+        page.get_by_role("link", name="Download data JSON", exact=True).click()
+    assert download.value.failure() is None

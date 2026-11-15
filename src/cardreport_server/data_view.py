@@ -1,6 +1,7 @@
 """Bounded views of the immutable data snapshot committed with a report."""
 
 import time
+from dataclasses import replace
 from datetime import date
 from typing import cast
 from uuid import UUID
@@ -10,9 +11,9 @@ from fastapi import Request
 from starlette.concurrency import run_in_threadpool
 
 from . import dependencies as deps
-from .datasets import SNAPSHOT_LIMIT
 from .downloads import artifact_row
 from .errors import APIError
+from .limits import restored_limits
 from .storage import read_verified
 
 
@@ -20,9 +21,16 @@ def _read_snapshot(request: Request, report_id: UUID) -> dict[str, Dataset]:
     db = deps.database(request)
     deadline = time.monotonic() + deps.settings(request).download_timeout
     row = artifact_row(db, report_id, "data")
+    policy = restored_limits(row.get("resource_limits"))
     size = row["data_size"]
-    if not isinstance(size, int) or not 0 < size <= SNAPSHOT_LIMIT:
+    if not isinstance(size, int) or not 0 < size <= policy.snapshot_bytes:
         raise APIError(503, "data_integrity", "Saved dataset snapshot is invalid")
+    if size > deps.settings(request).view_limit:
+        raise APIError(
+            413,
+            "data_view_too_large",
+            "Snapshot is too large to preview; download the normalized data",
+        )
     raw = read_verified(
         deps.storage(request).get(cast(str, row["data_key"])),
         size,
@@ -32,8 +40,9 @@ def _read_snapshot(request: Request, report_id: UUID) -> dict[str, Dataset]:
         timeout=APIError(504, "data_timeout", "Reading report data timed out"),
     )
     try:
-        # Operators may lower input limits but cannot raise the library ceilings.
-        datasets = datasets_from_json(raw)
+        datasets = datasets_from_json(
+            raw, limits=replace(policy.data, max_json_bytes=policy.snapshot_bytes)
+        )
     except DataError:
         raise APIError(
             503, "data_integrity", "Saved dataset snapshot is invalid"

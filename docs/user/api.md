@@ -19,7 +19,9 @@ allow access only from trusted callers. All permitted callers can mutate templat
 
 IDs match `[a-z0-9][a-z0-9_-]{0,63}`. The POST body is an existing
 `cardreport.template/1` envelope, with `Content-Type: application/json` or
-`application/yaml`; UTF-8 only. Limit: 1 MiB. YAML comments/style are not stored.
+`application/yaml`; UTF-8 only. Default limit: 1 MiB (`CARDREPORT_TEMPLATE_LIMIT`). If an existing template exceeds
+a subsequently lowered limit, report submission returns 413 `template_too_large`
+before reading its dataset body. YAML comments/style are not stored.
 The response includes the version, SHA-256 digest, library version and creation time.
 Getting one version also returns `page_dimensions_mm: [width, height]`, derived
 through CardReport’s public Page API, without changing the stored definition/digest.
@@ -218,7 +220,7 @@ curl, httpx or browser FormData construct the boundary. Swagger `/docs` exposes
 one repeated file list and optional CSV settings. No separate `data` part is accepted.
 
 The **entire request**, including framing/options, must fit `CARDREPORT_INPUT_LIMIT`
-(at most 16 MiB). Combined dataset limits apply across files. The API streams and
+(default 16 MiB; configurable). Combined dataset limits apply across files. The API streams and
 hashes the raw upload; the child parses it with Starlette/python-multipart, uses
 CardReport's public adapters and binds with configured limits. Temporary spools
 are closed and generated scratch paths removed after use. This is bounded file
@@ -227,9 +229,9 @@ loading, not constant-memory row streaming.
 A missing/invalid boundary returns 400, unsupported encoding/charset 415, oversized
 upload 413. Invalid bodies are accepted as jobs (202), then fail terminally with
 `invalid_data`, stage `bind`, without exposing cell contents in error messages.
-Normalized data must also fit the fixed 16 MiB snapshot ceiling. CSV/YAML can expand
+Normalized data must also fit `CARDREPORT_SNAPSHOT_LIMIT` (default 16 MiB). CSV/YAML can expand
 during canonical serialization; excessive expansion fails before rendering with
-`data_snapshot_too_large`. Lowering the raw upload limit does not lower this ceiling.
+`data_snapshot_too_large`. Lowering the raw upload limit does not lower this separate budget. Accepted jobs retain their admission budgets.
 
 ## Report data
 
@@ -257,7 +259,10 @@ Status/history include `data_available`. All data endpoints share result expiry:
 `data_unavailable` for an older successful report, or `dataset_not_found` for an
 unknown dataset. Successful views/downloads use `Cache-Control: no-store`. Each view reads a
 bounded, size/hash-verified snapshot; per-API `CARDREPORT_DATA_VIEW_SLOTS` (default 2)
-limits concurrent views. Busy views return 503 with Retry-After. Corrupt snapshots
+limits concurrent views. Snapshots above the current `CARDREPORT_VIEW_LIMIT` return
+413 `data_view_too_large`; download `/data` instead. Structured original-input
+inspection above that budget returns 413 `input_view_too_large`; `/input` remains
+available as a size/hash-verified, disk-spooled download. Busy views return 503 with Retry-After. Corrupt snapshots
 return 503 `data_integrity`; a view exceeding its read budget returns 504 `data_timeout`. There is no cache,
 search, data editing or automatic rerun. Original failed inputs are available separately below.
 

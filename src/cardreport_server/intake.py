@@ -58,7 +58,9 @@ def media_type(request: Request, limit: int, *, multipart: bool = False) -> str:
 
 
 async def read_template(request: Request) -> tuple[bytes, str]:
-    limit = 1024 * 1024
+    from . import dependencies as deps
+
+    limit = deps.settings(request).template_limit
     kind = media_type(request, limit)
     result = bytearray()
     try:

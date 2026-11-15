@@ -1,7 +1,7 @@
 """Durable report admission, PostgreSQL queue and attempt ownership."""
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from math import ceil
 from typing import Any
@@ -14,6 +14,7 @@ from psycopg.types.json import Jsonb
 from .db import Database
 from .errors import APIError
 from .history import STATUS_COLUMNS
+from .limits import ResourceLimits, restored_limits
 from .render_contract import Artifact, Outcome
 from .render_contract import Output as Output
 from .render_contract import RendererName as RendererName
@@ -52,14 +53,18 @@ def admit(
         if row["archived"]:
             raise APIError(409, "template_archived", "Template is archived")
         chosen = revision if revision is not None else int(row["latest_version"])
-        if (
-            conn.execute(
-                "SELECT 1 FROM template_versions WHERE template_id=%s AND version=%s",
-                (template_id, chosen),
-            ).fetchone()
-            is None
-        ):
+        stored = conn.execute(
+            "SELECT octet_length(definition::text) AS size FROM template_versions WHERE template_id=%s AND version=%s",
+            (template_id, chosen),
+        ).fetchone()
+        if stored is None:
             raise APIError(404, "template_not_found", "Template version does not exist")
+        if stored["size"] > settings.template_limit:
+            raise APIError(
+                413,
+                "template_too_large",
+                "Stored template exceeds the current template size limit",
+            )
         _check_backlog(conn, settings.backlog_limit)
         retention = row["retention_seconds"] or settings.result_retention
         return Admission(
@@ -91,8 +96,8 @@ def enqueue(
         result = conn.execute(
             """
             INSERT INTO reports(id,template_id,template_version,input_key,input_type,input_size,input_hash,
-                                output_kind,renderer,input_retention,result_retention,metadata_retention)
-            SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE clock_timestamp() < %s RETURNING id
+                                output_kind,renderer,input_retention,result_retention,metadata_retention,resource_limits)
+            SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE clock_timestamp() < %s RETURNING id
             """,
             (
                 report_id,
@@ -107,6 +112,7 @@ def enqueue(
                 admission.retention,
                 admission.retention,
                 admission.metadata_retention,
+                Jsonb(settings.resource_limits.model_dump()),
                 admission.deadline,
             ),
         ).fetchone()
@@ -140,6 +146,7 @@ class Attempt:
     renderer: RendererName
     lease_until: datetime
     deadline: datetime
+    limits: ResourceLimits = field(default_factory=ResourceLimits)
 
 
 def claim(db: Database, settings: Settings) -> Attempt | None:
@@ -175,6 +182,7 @@ def claim(db: Database, settings: Settings) -> Attempt | None:
         renderer=row["renderer"],
         lease_until=row["lease_until"],
         deadline=row["attempt_deadline"],
+        limits=restored_limits(row["resource_limits"]),
     )
 
 

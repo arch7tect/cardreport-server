@@ -147,7 +147,6 @@ export async function templateEditor(root, ctx, id = null, revision = null) {
   form.addEventListener('input', () => { ctx.dirty = true; });
   file.addEventListener('change', async () => {
     const chosen = file.files[0]; if (!chosen) return;
-    if (chosen.size > 1024 * 1024) { message(status, 'Template exceeds the 1 MiB library limit.', 'error'); return; }
     const text = await chosen.text(); if (!ctx.active) return;
     source.value = text; format.value = formatFor(chosen.name); ctx.dirty = true;
   });
